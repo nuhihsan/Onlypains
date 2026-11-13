@@ -20,7 +20,7 @@ Each friend who opens the link gets their own separate, private log on their own
 
 1. Repo **Settings > Pages**.
 2. Under **Build and deployment**, set Source to **Deploy from a branch**, Branch **main**, folder **/ (root)**, then **Save**.
-3. After a minute the app is live at `https://nuhihsan.github.io/onlypains/`.
+3. After a minute the app is live at `https://nuhihsan.github.io/Onlypains/`.
 
 On your phone, open that link and use **Add to Home Screen** (Safari share menu, or Chrome's menu) so it opens like an app and works offline.
 
