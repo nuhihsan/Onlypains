@@ -901,7 +901,7 @@ async function restoreBackup(text){
 function dataCardHtml(){
   return `<section class="card"><h2>Your data</h2>
     <p class="muted">${storageMode === "local" ? "Everything is saved on this phone, in this browser. Nobody else can see it, but clearing your browser data or changing phones would lose it, so download a backup now and then." : "Everything is saved to your Claude account and is private to you."}</p>
-    <div class="row" style="flex-wrap:wrap"><button class="btn" data-action="bk-download">Download backup</button><button class="btn" data-action="bk-copy">Copy backup</button>
+    <div class="row" style="flex-wrap:wrap">${storageMode === "local" ? `<button class="btn" data-action="bk-download">Download backup</button>` : ""}<button class="btn" data-action="bk-copy">Copy backup</button>
       <label class="btn" for="bk-file" style="display:inline-flex;align-items:center">Restore from file</label><input id="bk-file" type="file" accept=".json,application/json" hidden></div>
     <details><summary class="muted">Restore by pasting a backup</summary>
       <textarea id="bk-text" rows="4" style="width:100%;margin-top:8px;border:1px solid var(--line);border-radius:10px;background:var(--bg);padding:8px;font:12px/1.4 ui-monospace,monospace" placeholder="Paste a copied backup here"></textarea>
