@@ -30,7 +30,7 @@
     --bg:#101216; --surface:#1a1d23; --ink:#eceef1; --muted:#9aa2ad; --line:#2b3038;
     --accent:#6e98ff; --accent-ink:#0b1020; --accent-soft:#1d2840;
     --good:#55c98a; --good-bg:#16301f; --warn:#e6a64e; --warn-bg:#33270f; --danger:#ff7b70;
-    --fig:#3d434d; --muscle:#ff6a52;
+    --fig:#4b525d; --muscle:#ff6a52;
     color-scheme:dark;
   }
 }
@@ -38,7 +38,7 @@
   --bg:#101216; --surface:#1a1d23; --ink:#eceef1; --muted:#9aa2ad; --line:#2b3038;
   --accent:#6e98ff; --accent-ink:#0b1020; --accent-soft:#1d2840;
   --good:#55c98a; --good-bg:#16301f; --warn:#e6a64e; --warn-bg:#33270f; --danger:#ff7b70;
-  --fig:#3d434d; --muscle:#ff6a52;
+  --fig:#4b525d; --muscle:#ff6a52;
   color-scheme:dark;
 }
 *{box-sizing:border-box}
@@ -177,13 +177,13 @@ select,.field input,.field textarea{border:1px solid var(--line);background:var(
 .est .m-row{border-color:var(--line)}
 .groups{display:flex;gap:8px;overflow-x:auto;margin:0 -16px;padding:2px 16px 6px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .groups::-webkit-scrollbar{display:none}
-.gchip{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:2px;width:70px;padding:8px 4px 6px;border:1px solid var(--line);border-radius:12px;background:var(--surface);font-size:12px;font-weight:600;color:var(--muted)}
-.gchip svg{width:26px;height:39px}
+.gchip{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:2px;width:74px;padding:8px 4px 6px;border:1px solid var(--line);border-radius:12px;background:var(--surface);font-size:12px;font-weight:600;color:var(--muted)}
+.gchip svg{width:48px;height:45px}
 .gchip.on{border-color:var(--accent);color:var(--ink);box-shadow:0 0 0 1px var(--accent);background:var(--accent-soft)}
 .search{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:10px;padding:0 12px;height:46px;width:100%;font-size:16px}
 .ex-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px}
 .exc{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:4px;padding:10px 6px 8px;border:1px solid var(--line);border-radius:12px;background:var(--surface);text-align:center;min-height:120px}
-.exc svg{width:30px;height:45px;flex:0 0 auto}
+.exc svg{width:92px;height:86px;flex:0 0 auto}
 .exc b{font-size:13px;line-height:1.2;font-weight:600}
 .exc small{font-size:11px;color:var(--muted);line-height:1.2}
 .exc.sel{border-color:var(--accent);background:var(--accent-soft);box-shadow:0 0 0 1px var(--accent)}
@@ -340,25 +340,79 @@ function allExercises(){
   for(const sp of Object.values(cfg.splits)) for(const e of sp.exercises) if(!seen.has(e.name.toLowerCase())){ seen.add(e.name.toLowerCase()); out.push({ name: e.name, group: "other", eq: "your exercise" }); }
   return out;
 }
-// simple original body diagram; the group's muscles are highlighted
-function figSvg(group){
-  const H = "var(--muscle)", B = "var(--fig)";
-  const parts = {
-    chest: `<rect x="12.5" y="16" width="7" height="7" rx="2.5" fill="${H}"/><rect x="20.5" y="16" width="7" height="7" rx="2.5" fill="${H}"/>`,
-    back: `<path d="M12 15h16l-3 17h-10z" fill="${H}"/><path d="M20 15v18" stroke="${B}" stroke-width="1.2"/>`,
-    shoulders: `<circle cx="10.5" cy="16.5" r="3.4" fill="${H}"/><circle cx="29.5" cy="16.5" r="3.4" fill="${H}"/>`,
-    biceps: `<rect x="5.5" y="18" width="4.5" height="7" rx="2.2" fill="${H}"/><rect x="30" y="18" width="4.5" height="7" rx="2.2" fill="${H}"/>`,
-    triceps: `<rect x="4.6" y="16.5" width="3" height="9" rx="1.5" fill="${H}"/><rect x="32.4" y="16.5" width="3" height="9" rx="1.5" fill="${H}"/>`,
-    legs: `<rect x="12.3" y="39.5" width="6.4" height="10" rx="3" fill="${H}"/><rect x="21.3" y="39.5" width="6.4" height="10" rx="3" fill="${H}"/><rect x="13" y="51" width="5" height="6" rx="2.5" fill="${H}"/><rect x="22" y="51" width="5" height="6" rx="2.5" fill="${H}"/>`,
-    glutes: `<rect x="12" y="32.5" width="7.6" height="8" rx="3.5" fill="${H}"/><rect x="20.4" y="32.5" width="7.6" height="8" rx="3.5" fill="${H}"/>`,
-    core: `<rect x="15" y="23" width="10" height="10" rx="2" fill="${H}"/><path d="M20 23.5v9M15.5 27h9M15.5 30h9" stroke="${B}" stroke-width=".8"/>`
-  };
-  const base = `<circle cx="20" cy="7" r="5" fill="${B}"/><rect x="18" y="11" width="4" height="4" fill="${B}"/><rect x="11" y="14" width="18" height="20" rx="4" fill="${B}"/>
-    <rect x="5" y="15" width="5.5" height="19" rx="2.7" fill="${B}"/><rect x="29.5" y="15" width="5.5" height="19" rx="2.7" fill="${B}"/>
-    <rect x="12" y="32" width="16" height="7" rx="3" fill="${B}"/><rect x="12" y="38" width="7" height="20" rx="3.2" fill="${B}"/><rect x="21" y="38" width="7" height="20" rx="3.2" fill="${B}"/>`;
-  if(group === "all") return `<svg viewBox="0 0 40 60" aria-hidden="true"><rect x="6" y="14" width="12" height="12" rx="3" fill="${B}"/><rect x="22" y="14" width="12" height="12" rx="3" fill="${B}"/><rect x="6" y="30" width="12" height="12" rx="3" fill="${B}"/><rect x="22" y="30" width="12" height="12" rx="3" fill="${H}"/></svg>`;
-  return `<svg viewBox="0 0 40 60" aria-hidden="true">${base}${parts[group] || ""}</svg>`;
+/* ---------- muscle map: front and back view, main muscles bright, helpers faint ---------- */
+const MUSCLE_NAME = { chest: "Chest", chest_upper: "Upper chest", delt_front: "Front delts", delt_side: "Side delts", delt_rear: "Rear delts", traps: "Traps", lats: "Lats", lower_back: "Lower back", biceps: "Biceps", triceps: "Triceps", forearms: "Forearms", abs: "Abs", obliques: "Obliques", quads: "Quads", hamstrings: "Hamstrings", glutes: "Glutes", calves: "Calves" };
+const GROUP_MUSCLES = { chest: [["chest","chest_upper"],[]], back: [["lats","traps","lower_back"],[]], shoulders: [["delt_front","delt_side","delt_rear"],[]], biceps: [["biceps"],["forearms"]], triceps: [["triceps"],[]], legs: [["quads","hamstrings","calves"],["glutes"]], glutes: [["glutes"],["hamstrings"]], core: [["abs","obliques"],[]], other: [[],[]] };
+const EX_MUSCLES = {
+  "Bench Press": "chest|delt_front,triceps", "Incline Bench Press": "chest_upper|delt_front,triceps", "Decline Bench Press": "chest|triceps",
+  "Dumbbell Bench Press": "chest|delt_front,triceps", "Incline Dumbbell Press": "chest_upper,delt_front|triceps", "Dumbbell Flyes": "chest,chest_upper|delt_front",
+  "Chest Press Machine": "chest|delt_front,triceps", "Pec Deck": "chest,chest_upper|", "Cable Crossover": "chest|chest_upper,delt_front",
+  "Push-Up": "chest|triceps,delt_front,abs", "Weighted Push-Up": "chest|triceps,delt_front,abs", "Chest Dips": "chest|triceps,delt_front", "Landmine Press": "chest_upper,delt_front|triceps",
+  "Pull-Up": "lats|biceps,delt_rear,forearms", "Chin-Up": "lats,biceps|forearms", "Lat Pulldown": "lats|biceps,delt_rear", "Close-Grip Pulldown": "lats|biceps",
+  "Barbell Row": "lats,traps|delt_rear,biceps,lower_back", "Dumbbell Row": "lats|traps,delt_rear,biceps", "Seated Cable Row": "lats,traps|delt_rear,biceps",
+  "T-Bar Row": "lats,traps|delt_rear,lower_back,biceps", "Machine Row": "traps,lats|delt_rear,biceps", "Straight-Arm Pulldown": "lats|triceps",
+  "Deadlift": "lower_back,glutes,hamstrings|traps,quads,forearms,lats", "Rack Pull": "lower_back,traps|glutes,forearms", "Back Extension": "lower_back|glutes,hamstrings",
+  "Overhead Press": "delt_front,delt_side|triceps,traps", "Dumbbell Shoulder Press": "delt_front,delt_side|triceps,traps", "Shoulder Press Machine": "delt_front,delt_side|triceps",
+  "Arnold Press": "delt_front,delt_side|triceps", "Lateral Raise": "delt_side|traps", "Cable Lateral Raise": "delt_side|", "Front Raise": "delt_front|chest_upper",
+  "Rear Delt Fly": "delt_rear|traps", "Reverse Pec Deck": "delt_rear|traps", "Face Pull": "delt_rear,traps|delt_side", "Upright Row": "delt_side,traps|biceps", "Shrug": "traps|forearms",
+  "Bicep Curl": "biceps|forearms", "Barbell Curl": "biceps|forearms", "EZ-Bar Curl": "biceps|forearms", "Hammer Curl": "biceps,forearms|", "Preacher Curl": "biceps|",
+  "Incline Dumbbell Curl": "biceps|", "Cable Curl": "biceps|forearms", "Concentration Curl": "biceps|",
+  "Tricep Pushdown": "triceps|", "Rope Pushdown": "triceps|", "Overhead Tricep Extension": "triceps|", "Skull Crusher": "triceps|", "Close-Grip Bench Press": "triceps,chest|delt_front",
+  "Dips": "triceps,chest|delt_front", "Bench Dips": "triceps|delt_front", "Tricep Kickback": "triceps|",
+  "Squat": "quads,glutes|hamstrings,lower_back", "Front Squat": "quads|glutes,abs", "Leg Press": "quads,glutes|hamstrings", "Hack Squat": "quads|glutes", "Goblet Squat": "quads,glutes|abs",
+  "Bulgarian Split Squat": "quads,glutes|hamstrings", "Lunges": "quads,glutes|hamstrings", "Step-Up": "quads,glutes|hamstrings", "Leg Extension": "quads|", "Leg Curl": "hamstrings|calves",
+  "Romanian Deadlift": "hamstrings,glutes|lower_back", "Stiff-Leg Deadlift": "hamstrings|glutes,lower_back", "Calf Raise": "calves|", "Seated Calf Raise": "calves|",
+  "Hip Thrust": "glutes|hamstrings", "Glute Bridge": "glutes|hamstrings", "Sumo Deadlift": "glutes,quads,hamstrings|lower_back,traps", "Cable Kickback": "glutes|hamstrings", "Hip Abduction Machine": "glutes|",
+  "Plank": "abs|obliques,delt_front", "Side Plank": "obliques|abs", "Crunch": "abs|", "Cable Crunch": "abs|obliques", "Hanging Leg Raise": "abs|obliques,forearms",
+  "Russian Twist": "obliques|abs", "Ab Wheel Rollout": "abs|lats,delt_front", "Mountain Climbers": "abs|quads,delt_front"
+};
+function exMuscles(name){
+  const v = EX_MUSCLES[Object.keys(EX_MUSCLES).find(k => k.toLowerCase() === String(name).toLowerCase())];
+  if(v){ const [p, s] = v.split("|"); return [p ? p.split(",") : [], s ? s.split(",") : []]; }
+  return GROUP_MUSCLES[exGroup(name)] || [[], []];
 }
+function bodySvg(prim, sec){
+  const P = new Set(prim), S = new Set(sec);
+  const f = k => P.has(k) ? `fill="var(--muscle)"` : S.has(k) ? `fill="var(--muscle)" fill-opacity=".42"` : `fill="var(--fig)"`;
+  const dim = `fill="var(--fig)" fill-opacity=".55"`;
+  const side = (c, m) => { // m = -1 left, 1 right
+    const x = d => c + m * d;
+    return { x };
+  };
+  const both = (c, fn) => fn(c, -1) + fn(c, 1);
+  const e = (cx, cy, rx, ry, a) => `<ellipse cx="${cx.toFixed(2)}" cy="${cy}" rx="${rx}" ry="${ry}" ${a}/>`;
+  const front = c => `
+    ${e(c, 8.5, 4.2, 5, dim)}<rect x="${c-2}" y="12.8" width="4" height="3.6" ${dim}/>
+    <path d="M${c-2} 15.6 L${c-7} 18 L${c+7} 18 L${c+2} 15.6Z" ${f("traps")}/>
+    ${both(c, (c, m) => `
+      ${e(c+m*12.7, 21.2, 1.9, 3.7, f("delt_side"))}${e(c+m*10, 20.6, 3.5, 4.1, f("delt_front"))}
+      <path d="M${c+m*0.8} 18.3 L${c+m*7.8} 19.3 Q${c+m*9.3} 21 ${c+m*8.9} 22.7 L${c+m*0.8} 22.7Z" ${f("chest_upper")}/>
+      <path d="M${c+m*0.8} 23.2 L${c+m*8.9} 23.2 Q${c+m*8.6} 27.2 ${c+m*6.4} 28.4 L${c+m*0.8} 28.6Z" ${f("chest")}/>
+      ${e(c+m*12.4, 28.6, 2.3, 4.7, f("biceps"))}${e(c+m*13.8, 38.4, 2.1, 5.4, f("forearms"))}${e(c+m*14.4, 46, 1.6, 2.2, dim)}
+      <path d="M${c+m*4.6} 29.6 L${c+m*8.3} 29 Q${c+m*8.7} 36 ${c+m*7.5} 41 L${c+m*4.6} 44Z" ${f("obliques")}/>
+      ${e(c+m*4.7, 58.6, 3.9, 9.4, f("quads"))}${e(c+m*4.7, 69.6, 2.2, 1.5, dim)}${e(c+m*4.8, 78.6, 2.4, 7, f("calves"))}${e(c+m*5.2, 88.2, 2.6, 1.5, dim)}`)}
+    <rect x="${c-4}" y="29.2" width="8" height="15" rx="2" ${f("abs")}/>
+    <path d="M${c} 29.6V43.8M${c-3.8} 33.2H${c+3.8}M${c-3.8} 37H${c+3.8}M${c-3.8} 40.6H${c+3.8}" stroke="var(--surface)" stroke-width=".55"/>
+    <path d="M${c-7.6} 44.4 L${c+7.6} 44.4 L${c+5.4} 49 L${c-5.4} 49Z" ${dim}/>`;
+  const back = c => `
+    ${e(c, 8.5, 4.2, 5, dim)}<rect x="${c-2}" y="12.8" width="4" height="3.6" ${dim}/>
+    <path d="M${c} 14.6 L${c-7.8} 19 L${c-2.4} 22.2 L${c} 31 L${c+2.4} 22.2 L${c+7.8} 19Z" ${f("traps")}/>
+    ${both(c, (c, m) => `
+      ${e(c+m*12.7, 21.2, 1.9, 3.7, f("delt_side"))}${e(c+m*10, 20.6, 3.5, 4.1, f("delt_rear"))}
+      <path d="M${c+m*1.6} 24.8 L${c+m*8.8} 22.6 Q${c+m*9.5} 29 ${c+m*7.3} 34.2 L${c+m*2.3} 39Z" ${f("lats")}/>
+      ${e(c+m*12.4, 28.6, 2.4, 4.8, f("triceps"))}${e(c+m*13.8, 38.4, 2.1, 5.4, f("forearms"))}${e(c+m*14.4, 46, 1.6, 2.2, dim)}
+      ${e(c+m*4.4, 48.8, 4.3, 4.4, f("glutes"))}${e(c+m*4.7, 61.4, 3.8, 8, f("hamstrings"))}${e(c+m*4.7, 70.4, 2.2, 1.4, dim)}${e(c+m*4.8, 77.8, 2.9, 6.8, f("calves"))}${e(c+m*5.2, 88.2, 2.6, 1.5, dim)}`)}
+    <path d="M${c-1.9} 31.4 L${c+1.9} 31.4 L${c+3.7} 44.2 L${c-3.7} 44.2Z" ${f("lower_back")}/>`;
+  return `<svg viewBox="2 2 96 90" aria-hidden="true">${front(25)}${back(75)}</svg>`;
+}
+function figSvg(group){
+  if(group === "all") return `<svg viewBox="0 0 40 40" aria-hidden="true"><rect x="5" y="5" width="13" height="13" rx="3" fill="var(--fig)"/><rect x="22" y="5" width="13" height="13" rx="3" fill="var(--fig)"/><rect x="5" y="22" width="13" height="13" rx="3" fill="var(--fig)"/><rect x="22" y="22" width="13" height="13" rx="3" fill="var(--muscle)"/></svg>`;
+  const [p, s] = GROUP_MUSCLES[group] || [[], []];
+  return bodySvg(p, s);
+}
+function exFigSvg(name){ const [p, s] = exMuscles(name); return bodySvg(p, s); }
+function exMuscleLabel(name){ const [p] = exMuscles(name); return p.map(k => MUSCLE_NAME[k]).join(", "); }
+
 let pick = null; // { mode: "session" | "template", key, name, items: [{name, sets, reps}], group, q, saveBack, newEx: [] }
 function openPicker(mode, key){
   const sp = key && cfg.splits[key];
@@ -375,7 +429,7 @@ function pickGridHtml(){
   else if(pick.group !== "all") list = list.filter(e => e.group === pick.group);
   const idx = n => pick.items.findIndex(i => i.name.toLowerCase() === n.toLowerCase());
   const cards = list.map(e => { const i = idx(e.name);
-    return `<button class="exc ${i >= 0 ? "sel" : ""}" data-action="pk-toggle" data-n="${esc(e.name)}" aria-pressed="${i >= 0}">${i >= 0 ? `<span class="ord">${i + 1}</span>` : ""}${figSvg(e.group === "other" ? "all" : e.group)}<b>${esc(e.name)}</b><small>${esc(GROUP_NAME[e.group] || "")} · ${esc(e.eq)}</small></button>`; }).join("");
+    return `<button class="exc ${i >= 0 ? "sel" : ""}" data-action="pk-toggle" data-n="${esc(e.name)}" aria-pressed="${i >= 0}">${i >= 0 ? `<span class="ord">${i + 1}</span>` : ""}${exFigSvg(e.name)}<b>${esc(e.name)}</b><small>${esc(exMuscleLabel(e.name) || GROUP_NAME[e.group] || "")} · ${esc(e.eq)}</small></button>`; }).join("");
   const exact = list.some(e => e.name.toLowerCase() === q);
   const defG = pick.group === "all" ? "other" : pick.group;
   const addNew = q && !exact ? `<div class="row" style="grid-column:1/-1;flex-wrap:wrap"><button class="btn" data-action="pk-new">+ Add "${esc(pick.q.trim())}"</button>
