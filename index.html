@@ -48,6 +48,10 @@ button,input,select{font:inherit;color:inherit}
 button{cursor:pointer}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+/* long unbroken words (e.g. a typed food name) must never widen the page */
+main,.card,.m-row,.m-row span,.exc b,.pk-name,.chips .btn,.hist-top h3,.detail .ln span{overflow-wrap:anywhere;min-width:0}
+.chips .btn{max-width:100%;white-space:normal;text-align:left}
+html,body{overflow-x:hidden}
 .app{display:flex;flex-direction:column;min-height:100%;max-width:560px;margin:0 auto}
 header{position:sticky;top:0;z-index:5;background:var(--bg);padding:14px 16px 10px;display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line)}
 h1{font-family:var(--display);font-weight:700;font-size:28px;letter-spacing:.5px;margin:0;text-transform:uppercase}
@@ -328,14 +332,14 @@ function clampInt(v, lo, hi, d){ v = Math.round(num(v)); return v >= lo && v <= 
 function exGroup(name){
   const k = String(name || "").toLowerCase();
   const lib = EX_LIB.find(e => e.name.toLowerCase() === k); if(lib) return lib.group;
-  const c = (cfg.customEx || []).find(e => e.name.toLowerCase() === k); if(c) return c.group;
+  const c = [...(cfg.customEx || []), ...(pick ? pick.newEx : [])].find(e => e.name.toLowerCase() === k); if(c) return c.group;
   return "other";
 }
 function exEquip(name){ const lib = EX_LIB.find(e => e.name.toLowerCase() === String(name).toLowerCase()); return lib ? lib.eq : "your exercise"; }
 function allExercises(){
   const out = EX_LIB.map(e => ({ ...e }));
   const seen = new Set(out.map(e => e.name.toLowerCase()));
-  for(const c of (cfg.customEx || [])) if(!seen.has(c.name.toLowerCase())){ seen.add(c.name.toLowerCase()); out.push({ name: c.name, group: c.group, eq: "your exercise" }); }
+  for(const c of [...(cfg.customEx || []), ...(pick ? pick.newEx : [])]) if(!seen.has(c.name.toLowerCase())){ seen.add(c.name.toLowerCase()); out.push({ name: c.name, group: c.group, eq: "your exercise" }); }
   for(const s of sessions) for(const e of (s.entries || [])) if(e.name && !seen.has(e.name.toLowerCase())){ seen.add(e.name.toLowerCase()); out.push({ name: e.name, group: "other", eq: "from your log" }); }
   for(const sp of Object.values(cfg.splits)) for(const e of sp.exercises) if(!seen.has(e.name.toLowerCase())){ seen.add(e.name.toLowerCase()); out.push({ name: e.name, group: "other", eq: "your exercise" }); }
   return out;
@@ -1588,7 +1592,7 @@ document.addEventListener("click", async ev => {
   if(a === "pk-cancel"){ const back = pick && pick.mode === "template" ? "setup" : "log"; pick = null; view = back; render(); window.scrollTo(0, 0); return; }
   if(a === "pk-group"){ pick.group = b.dataset.g; pick.q = ""; const q = document.getElementById("pk-q"); if(q) q.value = ""; refreshPick(); return; }
   if(a === "pk-toggle"){ const n = b.dataset.n, i = pick.items.findIndex(x => x.name.toLowerCase() === n.toLowerCase()); if(i >= 0) pick.items.splice(i, 1); else pick.items.push({ name: n, sets: cfg.setTarget, reps: cfg.repTarget }); refreshPick(); return; }
-  if(a === "pk-new"){ const raw = pick.q.trim().slice(0, 40); if(!raw) return; const n = raw.replace(/\b\w/g, c => c.toUpperCase()); const g = document.getElementById("pk-newg")?.value || (pick.group === "all" ? "other" : pick.group); pick.newEx.push({ name: n, group: g }); if(!(cfg.customEx || []).some(c => c.name.toLowerCase() === n.toLowerCase())) cfg.customEx = [...(cfg.customEx || []), { name: n, group: g }]; pick.items.push({ name: n, sets: cfg.setTarget, reps: cfg.repTarget }); pick.q = ""; const q = document.getElementById("pk-q"); if(q) q.value = ""; if(g !== "other") pick.group = g; refreshPick(); return; }
+  if(a === "pk-new"){ const raw = pick.q.trim().slice(0, 40); if(!raw) return; const n = raw.replace(/\b\w/g, c => c.toUpperCase()); const g = document.getElementById("pk-newg")?.value || (pick.group === "all" ? "other" : pick.group); if(!pick.newEx.some(c => c.name.toLowerCase() === n.toLowerCase())) pick.newEx.push({ name: n, group: g }); pick.items.push({ name: n, sets: cfg.setTarget, reps: cfg.repTarget }); pick.q = ""; const q = document.getElementById("pk-q"); if(q) q.value = ""; if(g !== "other") pick.group = g; refreshPick(); return; }
   if(a === "pk-sets" || a === "pk-reps"){ const it = pick.items[+b.dataset.i]; if(!it) return; if(a === "pk-sets") it.sets = Math.min(10, Math.max(1, it.sets + +b.dataset.d)); else it.reps = Math.min(100, Math.max(1, it.reps + +b.dataset.d)); refreshPick(); return; }
   if(a === "pk-mv"){ const i = +b.dataset.i, j = i + +b.dataset.d; if(j < 0 || j >= pick.items.length) return; [pick.items[i], pick.items[j]] = [pick.items[j], pick.items[i]]; refreshPick(); return; }
   if(a === "pk-rm"){ pick.items.splice(+b.dataset.i, 1); refreshPick(); return; }
@@ -1773,7 +1777,7 @@ if("serviceWorker" in navigator && location.protocol === "https:" && !window.cla
     // don't wipe focus while typing in a set
     const active = document.activeElement;
     if(view === "log" && draft && active && active.dataset && active.dataset.field){ renderWeekChip(); return; }
-    if(view !== "setup") render(); else renderWeekChip();
+    if(view !== "setup" && view !== "pick") render(); else renderWeekChip();
   }, e => { clearTimeout(timer); if(status !== "readonly"){ status = "slow"; render(); } });
 })();
 </script>
