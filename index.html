@@ -20,6 +20,7 @@
   --bg:#eceeed; --surface:#ffffff; --ink:#15181c; --muted:#5d6570; --line:#d3d8d6;
   --accent:#1d55c4; --accent-ink:#ffffff; --accent-soft:#e2eafb;
   --good:#1c7f47; --good-bg:#dff1e6; --warn:#9a5800; --warn-bg:#fbecd6; --danger:#b3261e;
+  --fig:#c3cac7; --muscle:#e0533d;
   --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
   --body:"Barlow",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   color-scheme:light;
@@ -29,6 +30,7 @@
     --bg:#101216; --surface:#1a1d23; --ink:#eceef1; --muted:#9aa2ad; --line:#2b3038;
     --accent:#6e98ff; --accent-ink:#0b1020; --accent-soft:#1d2840;
     --good:#55c98a; --good-bg:#16301f; --warn:#e6a64e; --warn-bg:#33270f; --danger:#ff7b70;
+    --fig:#3d434d; --muscle:#ff6a52;
     color-scheme:dark;
   }
 }
@@ -36,6 +38,7 @@
   --bg:#101216; --surface:#1a1d23; --ink:#eceef1; --muted:#9aa2ad; --line:#2b3038;
   --accent:#6e98ff; --accent-ink:#0b1020; --accent-soft:#1d2840;
   --good:#55c98a; --good-bg:#16301f; --warn:#e6a64e; --warn-bg:#33270f; --danger:#ff7b70;
+  --fig:#3d434d; --muscle:#ff6a52;
   color-scheme:dark;
 }
 *{box-sizing:border-box}
@@ -106,9 +109,15 @@ nav svg{width:22px;height:22px}
 .tile{background:var(--bg);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:2px}
 .tile b{font-family:var(--display);font-size:26px;font-variant-numeric:tabular-nums;line-height:1}
 .tile span{font-size:12px;color:var(--muted)}
-select,.field input{border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:10px 12px;min-height:44px;width:100%}
-.field{display:flex;flex-direction:column;gap:4px;font-size:14px;color:var(--muted)}
-.fields{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+/* 16px inputs stop iOS zooming on focus; min-width:0 + appearance:none stop iOS date inputs overflowing their grid cell */
+select,.field input,.field textarea{border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:10px;padding:0 12px;height:46px;width:100%;min-width:0;max-width:100%;font-size:16px;line-height:1.2}
+.field input[type="date"]{-webkit-appearance:none;appearance:none;display:block;text-align:left;padding-top:0;padding-bottom:0;line-height:46px}
+.field input[type="date"]::-webkit-date-and-time-value{text-align:left;margin:0}
+.field input::placeholder{color:var(--muted);opacity:.7}
+.field{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600;color:var(--muted);min-width:0;letter-spacing:.2px}
+.field.wide{grid-column:1/-1}
+.fields{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px 10px}
+.tile b{overflow-wrap:anywhere}
 .ex-list{display:flex;flex-direction:column;gap:6px;margin:0;padding:0;list-style:none}
 .ex-list li{display:flex;align-items:center;gap:4px;padding:6px 0 6px 10px;border:1px solid var(--line);border-radius:10px}
 .ex-list li span{flex:1;font-weight:500}
@@ -166,7 +175,30 @@ select,.field input{border:1px solid var(--line);background:var(--bg);border-rad
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .est{display:flex;flex-direction:column;gap:8px;border:1px solid var(--accent);border-radius:10px;padding:10px;background:var(--accent-soft)}
 .est .m-row{border-color:var(--line)}
-.mini{width:76px;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 8px;min-height:36px;font-variant-numeric:tabular-nums}
+.groups{display:flex;gap:8px;overflow-x:auto;margin:0 -16px;padding:2px 16px 6px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.groups::-webkit-scrollbar{display:none}
+.gchip{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:2px;width:70px;padding:8px 4px 6px;border:1px solid var(--line);border-radius:12px;background:var(--surface);font-size:12px;font-weight:600;color:var(--muted)}
+.gchip svg{width:26px;height:39px}
+.gchip.on{border-color:var(--accent);color:var(--ink);box-shadow:0 0 0 1px var(--accent);background:var(--accent-soft)}
+.search{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:10px;padding:0 12px;height:46px;width:100%;font-size:16px}
+.ex-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px}
+.exc{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:4px;padding:10px 6px 8px;border:1px solid var(--line);border-radius:12px;background:var(--surface);text-align:center;min-height:120px}
+.exc svg{width:30px;height:45px;flex:0 0 auto}
+.exc b{font-size:13px;line-height:1.2;font-weight:600}
+.exc small{font-size:11px;color:var(--muted);line-height:1.2}
+.exc.sel{border-color:var(--accent);background:var(--accent-soft);box-shadow:0 0 0 1px var(--accent)}
+.exc .ord{position:absolute;top:6px;right:6px;min-width:22px;height:22px;border-radius:11px;background:var(--accent);color:var(--accent-ink);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.pk-item{display:grid;grid-template-columns:22px minmax(0,1fr) auto;grid-template-areas:"n name acts" ". steps steps";gap:4px 8px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.pk-n{grid-area:n}.pk-name{grid-area:name;font-weight:600}.pk-acts{grid-area:acts;display:flex}
+.pk-steps{grid-area:steps;display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:14px}
+.pk-item:first-child{border-top:0}
+.pk-n{font-family:var(--display);font-weight:700;font-size:18px;color:var(--muted);text-align:center}
+.mstep{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--bg)}
+.mstep button{border:0;background:transparent;width:32px;height:32px;font-size:17px;color:var(--muted)}
+.mstep b{min-width:24px;text-align:center;font-variant-numeric:tabular-nums}
+.split-btn.pick-own{border-style:dashed}
+.ex-list li small{font-size:12px}
+.mini{width:80px;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 8px;min-height:38px;font-size:16px;font-variant-numeric:tabular-nums}
 .cmp tr.cur th,.cmp tr.cur td{color:var(--good);font-weight:700}
 details summary{cursor:pointer;min-height:32px;display:flex;align-items:center}
 </style>
@@ -190,11 +222,233 @@ details summary{cursor:pointer;min-height:32px;display:flex;align-items:center}
 </div></nav>
 
 <script>
+/* ---------- exercise library, programs & the exercise picker ---------- */
+const GROUPS = [["chest","Chest"],["back","Back"],["shoulders","Shoulders"],["biceps","Biceps"],["triceps","Triceps"],["legs","Legs"],["glutes","Glutes"],["core","Core"]];
+const GROUP_NAME = Object.fromEntries([...GROUPS, ["other","Other"], ["all","All"]]);
+const EX_LIB = `chest|Bench Press|barbell
+chest|Incline Bench Press|barbell
+chest|Decline Bench Press|barbell
+chest|Dumbbell Bench Press|dumbbell
+chest|Incline Dumbbell Press|dumbbell
+chest|Dumbbell Flyes|dumbbell
+chest|Chest Press Machine|machine
+chest|Pec Deck|machine
+chest|Cable Crossover|cable
+chest|Push-Up|bodyweight
+chest|Weighted Push-Up|bodyweight
+chest|Chest Dips|bodyweight
+chest|Landmine Press|barbell
+back|Pull-Up|bodyweight
+back|Chin-Up|bodyweight
+back|Lat Pulldown|cable
+back|Close-Grip Pulldown|cable
+back|Barbell Row|barbell
+back|Dumbbell Row|dumbbell
+back|Seated Cable Row|cable
+back|T-Bar Row|barbell
+back|Machine Row|machine
+back|Straight-Arm Pulldown|cable
+back|Deadlift|barbell
+back|Rack Pull|barbell
+back|Back Extension|bodyweight
+shoulders|Overhead Press|barbell
+shoulders|Dumbbell Shoulder Press|dumbbell
+shoulders|Shoulder Press Machine|machine
+shoulders|Arnold Press|dumbbell
+shoulders|Lateral Raise|dumbbell
+shoulders|Cable Lateral Raise|cable
+shoulders|Front Raise|dumbbell
+shoulders|Rear Delt Fly|dumbbell
+shoulders|Reverse Pec Deck|machine
+shoulders|Face Pull|cable
+shoulders|Upright Row|barbell
+shoulders|Shrug|dumbbell
+biceps|Bicep Curl|dumbbell
+biceps|Barbell Curl|barbell
+biceps|EZ-Bar Curl|barbell
+biceps|Hammer Curl|dumbbell
+biceps|Preacher Curl|machine
+biceps|Incline Dumbbell Curl|dumbbell
+biceps|Cable Curl|cable
+biceps|Concentration Curl|dumbbell
+triceps|Tricep Pushdown|cable
+triceps|Rope Pushdown|cable
+triceps|Overhead Tricep Extension|cable
+triceps|Skull Crusher|barbell
+triceps|Close-Grip Bench Press|barbell
+triceps|Dips|bodyweight
+triceps|Bench Dips|bodyweight
+triceps|Tricep Kickback|dumbbell
+legs|Squat|barbell
+legs|Front Squat|barbell
+legs|Leg Press|machine
+legs|Hack Squat|machine
+legs|Goblet Squat|dumbbell
+legs|Bulgarian Split Squat|dumbbell
+legs|Lunges|dumbbell
+legs|Step-Up|dumbbell
+legs|Leg Extension|machine
+legs|Leg Curl|machine
+legs|Romanian Deadlift|barbell
+legs|Stiff-Leg Deadlift|barbell
+legs|Calf Raise|machine
+legs|Seated Calf Raise|machine
+glutes|Hip Thrust|barbell
+glutes|Glute Bridge|bodyweight
+glutes|Sumo Deadlift|barbell
+glutes|Cable Kickback|cable
+glutes|Hip Abduction Machine|machine
+core|Plank|bodyweight
+core|Side Plank|bodyweight
+core|Crunch|bodyweight
+core|Cable Crunch|cable
+core|Hanging Leg Raise|bodyweight
+core|Russian Twist|bodyweight
+core|Ab Wheel Rollout|bodyweight
+core|Mountain Climbers|bodyweight`.split("\n").map(l => { const [group, name, eq] = l.split("|"); return { group, name, eq }; });
+const PRESETS = {
+  ul: { label: "Upper / Lower", sub: "2 days that alternate", splits: [
+    ["upper", "Upper", ["Bench Press", "Lat Pulldown", "Overhead Press", "Seated Cable Row", "Bicep Curl", "Tricep Pushdown"]],
+    ["lower", "Lower", ["Squat", "Romanian Deadlift", "Leg Press", "Leg Curl", "Calf Raise"]]] },
+  full: { label: "Full body", sub: "A and B days, whole body each time", splits: [
+    ["fullA", "Full body A", ["Squat", "Bench Press", "Barbell Row", "Overhead Press", "Romanian Deadlift", "Plank"]],
+    ["fullB", "Full body B", ["Deadlift", "Incline Dumbbell Press", "Lat Pulldown", "Lunges", "Lateral Raise", "Hanging Leg Raise"]]] },
+  ppl: { label: "Push / Pull / Legs", sub: "3 days that rotate", splits: [
+    ["push", "Push", ["Bench Press", "Overhead Press", "Incline Dumbbell Press", "Lateral Raise", "Tricep Pushdown", "Overhead Tricep Extension"]],
+    ["pull", "Pull", ["Lat Pulldown", "Barbell Row", "Seated Cable Row", "Face Pull", "Bicep Curl", "Hammer Curl"]],
+    ["legs", "Legs", ["Squat", "Romanian Deadlift", "Leg Press", "Leg Curl", "Leg Extension", "Calf Raise"]]] },
+  custom: { label: "Custom", sub: "Your own split days" }
+};
+function presetSplits(p, sets, reps){
+  const splits = {}, order = [];
+  for(const [k, name, ex] of PRESETS[p].splits){ splits[k] = { name, exercises: ex.map(n => ({ name: n, sets, reps })) }; order.push(k); }
+  return { splits, order };
+}
+function clampInt(v, lo, hi, d){ v = Math.round(num(v)); return v >= lo && v <= hi ? v : d; }
+function exGroup(name){
+  const k = String(name || "").toLowerCase();
+  const lib = EX_LIB.find(e => e.name.toLowerCase() === k); if(lib) return lib.group;
+  const c = (cfg.customEx || []).find(e => e.name.toLowerCase() === k); if(c) return c.group;
+  return "other";
+}
+function exEquip(name){ const lib = EX_LIB.find(e => e.name.toLowerCase() === String(name).toLowerCase()); return lib ? lib.eq : "your exercise"; }
+function allExercises(){
+  const out = EX_LIB.map(e => ({ ...e }));
+  const seen = new Set(out.map(e => e.name.toLowerCase()));
+  for(const c of (cfg.customEx || [])) if(!seen.has(c.name.toLowerCase())){ seen.add(c.name.toLowerCase()); out.push({ name: c.name, group: c.group, eq: "your exercise" }); }
+  for(const s of sessions) for(const e of (s.entries || [])) if(e.name && !seen.has(e.name.toLowerCase())){ seen.add(e.name.toLowerCase()); out.push({ name: e.name, group: "other", eq: "from your log" }); }
+  for(const sp of Object.values(cfg.splits)) for(const e of sp.exercises) if(!seen.has(e.name.toLowerCase())){ seen.add(e.name.toLowerCase()); out.push({ name: e.name, group: "other", eq: "your exercise" }); }
+  return out;
+}
+// simple original body diagram; the group's muscles are highlighted
+function figSvg(group){
+  const H = "var(--muscle)", B = "var(--fig)";
+  const parts = {
+    chest: `<rect x="12.5" y="16" width="7" height="7" rx="2.5" fill="${H}"/><rect x="20.5" y="16" width="7" height="7" rx="2.5" fill="${H}"/>`,
+    back: `<path d="M12 15h16l-3 17h-10z" fill="${H}"/><path d="M20 15v18" stroke="${B}" stroke-width="1.2"/>`,
+    shoulders: `<circle cx="10.5" cy="16.5" r="3.4" fill="${H}"/><circle cx="29.5" cy="16.5" r="3.4" fill="${H}"/>`,
+    biceps: `<rect x="5.5" y="18" width="4.5" height="7" rx="2.2" fill="${H}"/><rect x="30" y="18" width="4.5" height="7" rx="2.2" fill="${H}"/>`,
+    triceps: `<rect x="4.6" y="16.5" width="3" height="9" rx="1.5" fill="${H}"/><rect x="32.4" y="16.5" width="3" height="9" rx="1.5" fill="${H}"/>`,
+    legs: `<rect x="12.3" y="39.5" width="6.4" height="10" rx="3" fill="${H}"/><rect x="21.3" y="39.5" width="6.4" height="10" rx="3" fill="${H}"/><rect x="13" y="51" width="5" height="6" rx="2.5" fill="${H}"/><rect x="22" y="51" width="5" height="6" rx="2.5" fill="${H}"/>`,
+    glutes: `<rect x="12" y="32.5" width="7.6" height="8" rx="3.5" fill="${H}"/><rect x="20.4" y="32.5" width="7.6" height="8" rx="3.5" fill="${H}"/>`,
+    core: `<rect x="15" y="23" width="10" height="10" rx="2" fill="${H}"/><path d="M20 23.5v9M15.5 27h9M15.5 30h9" stroke="${B}" stroke-width=".8"/>`
+  };
+  const base = `<circle cx="20" cy="7" r="5" fill="${B}"/><rect x="18" y="11" width="4" height="4" fill="${B}"/><rect x="11" y="14" width="18" height="20" rx="4" fill="${B}"/>
+    <rect x="5" y="15" width="5.5" height="19" rx="2.7" fill="${B}"/><rect x="29.5" y="15" width="5.5" height="19" rx="2.7" fill="${B}"/>
+    <rect x="12" y="32" width="16" height="7" rx="3" fill="${B}"/><rect x="12" y="38" width="7" height="20" rx="3.2" fill="${B}"/><rect x="21" y="38" width="7" height="20" rx="3.2" fill="${B}"/>`;
+  if(group === "all") return `<svg viewBox="0 0 40 60" aria-hidden="true"><rect x="6" y="14" width="12" height="12" rx="3" fill="${B}"/><rect x="22" y="14" width="12" height="12" rx="3" fill="${B}"/><rect x="6" y="30" width="12" height="12" rx="3" fill="${B}"/><rect x="22" y="30" width="12" height="12" rx="3" fill="${H}"/></svg>`;
+  return `<svg viewBox="0 0 40 60" aria-hidden="true">${base}${parts[group] || ""}</svg>`;
+}
+let pick = null; // { mode: "session" | "template", key, name, items: [{name, sets, reps}], group, q, saveBack, newEx: [] }
+function openPicker(mode, key){
+  const sp = key && cfg.splits[key];
+  const items = sp ? clone(sp.exercises) : [];
+  pick = { mode, key: key || (mode === "template" ? "c" + Date.now().toString(36) : "custom"), name: sp ? sp.name : (mode === "template" ? "" : "Custom"),
+    items, group: items.length ? exGroup(items[0].name) : "chest", q: "", saveBack: false, newEx: [], isNew: !sp };
+  if(pick.group === "other") pick.group = "all";
+  view = "pick"; render(); window.scrollTo(0, 0);
+}
+function pickGridHtml(){
+  const q = pick.q.trim().toLowerCase();
+  let list = allExercises();
+  if(q) list = list.filter(e => e.name.toLowerCase().includes(q) || (GROUP_NAME[e.group] || "").toLowerCase().includes(q));
+  else if(pick.group !== "all") list = list.filter(e => e.group === pick.group);
+  const idx = n => pick.items.findIndex(i => i.name.toLowerCase() === n.toLowerCase());
+  const cards = list.map(e => { const i = idx(e.name);
+    return `<button class="exc ${i >= 0 ? "sel" : ""}" data-action="pk-toggle" data-n="${esc(e.name)}" aria-pressed="${i >= 0}">${i >= 0 ? `<span class="ord">${i + 1}</span>` : ""}${figSvg(e.group === "other" ? "all" : e.group)}<b>${esc(e.name)}</b><small>${esc(GROUP_NAME[e.group] || "")} · ${esc(e.eq)}</small></button>`; }).join("");
+  const exact = list.some(e => e.name.toLowerCase() === q);
+  const defG = pick.group === "all" ? "other" : pick.group;
+  const addNew = q && !exact ? `<div class="row" style="grid-column:1/-1;flex-wrap:wrap"><button class="btn" data-action="pk-new">+ Add "${esc(pick.q.trim())}"</button>
+    <label class="row" style="gap:6px;font-size:14px;color:var(--muted)">as<select id="pk-newg" style="width:auto;height:40px">${[...GROUPS, ["other","Other"]].map(([k, l]) => `<option value="${k}" ${k === defG ? "selected" : ""}>${l}</option>`).join("")}</select></label></div>` : "";
+  return (cards || `<p class="muted" style="grid-column:1/-1">No exercises match.</p>`) + addNew;
+}
+function pickListHtml(){
+  if(!pick.items.length) return `<p class="muted">Tap exercises above to add them.</p>`;
+  return pick.items.map((it, i) => `<div class="pk-item">
+      <span class="pk-n">${i + 1}</span>
+      <b class="pk-name">${esc(it.name)}</b>
+      <div class="pk-steps">
+        <span class="mstep"><button data-action="pk-sets" data-i="${i}" data-d="-1" aria-label="Fewer sets">−</button><b>${it.sets}</b><button data-action="pk-sets" data-i="${i}" data-d="1" aria-label="More sets">+</button></span><span class="muted">sets ×</span>
+        <span class="mstep"><button data-action="pk-reps" data-i="${i}" data-d="-1" aria-label="Fewer reps">−</button><b>${it.reps}</b><button data-action="pk-reps" data-i="${i}" data-d="1" aria-label="More reps">+</button></span><span class="muted">reps</span></div>
+      <div class="pk-acts"><button class="icon-btn" data-action="pk-mv" data-i="${i}" data-d="-1" ${i === 0 ? "disabled" : ""} aria-label="Move up">↑</button><button class="icon-btn" data-action="pk-mv" data-i="${i}" data-d="1" ${i === pick.items.length - 1 ? "disabled" : ""} aria-label="Move down">↓</button><button class="icon-btn" data-action="pk-rm" data-i="${i}" aria-label="Remove ${esc(it.name)}">✕</button></div>
+    </div>`).join("");
+}
+function pickSummary(){ const sets = pick.items.reduce((a, i) => a + i.sets, 0); return `${pick.items.length} exercise${pick.items.length === 1 ? "" : "s"} · ${sets} sets · ~${Math.round(sets * 2.2)} min`; }
+function pickChanged(){ const sp = cfg.splits[pick.key]; return !!sp && JSON.stringify(sp.exercises) !== JSON.stringify(pick.items); }
+function refreshPick(){
+  const g = document.getElementById("pk-grid"); if(g) g.innerHTML = pickGridHtml();
+  const l = document.getElementById("pk-list"); if(l) l.innerHTML = pickListHtml();
+  const s = document.getElementById("pk-sum"); if(s) s.textContent = pickSummary();
+  const sb = document.getElementById("pk-saveback"); if(sb) sb.hidden = !(pick.mode === "session" && pickChanged());
+  document.querySelectorAll(".gchip").forEach(c => { const on = !pick.q.trim() && c.dataset.g === pick.group; c.classList.toggle("on", on); c.setAttribute("aria-pressed", on); });
+}
+function renderPick(){
+  const groups = [["all","All"], ...GROUPS, ...(allExercises().some(e => e.group === "other") ? [["other","Other"]] : [])];
+  return `<section class="row between"><button class="icon-btn" data-action="pk-cancel">‹ Back</button><h2>${pick.mode === "template" ? (pick.isNew ? "New split" : "Edit split") : "Build today's workout"}</h2><span style="width:52px"></span></section>
+    ${pick.mode === "template" ? `<label class="field" for="pk-name">Split name<input id="pk-name" type="text" maxlength="30" value="${esc(pick.name)}" placeholder="e.g. Chest & Triceps"></label>`
+      : `<p class="muted">${esc(pick.name)} day. Tap exercises to add or remove them for today.</p>`}
+    <div class="groups" role="group" aria-label="Muscle group">${groups.map(([k, l]) => `<button class="gchip ${k === pick.group && !pick.q ? "on" : ""}" data-action="pk-group" data-g="${k}" aria-pressed="${k === pick.group}">${figSvg(k === "other" ? "all" : k)}${l}</button>`).join("")}</div>
+    <input id="pk-q" class="search" type="search" placeholder="Search exercises" value="${esc(pick.q)}" aria-label="Search exercises" autocomplete="off">
+    <div class="ex-grid" id="pk-grid">${pickGridHtml()}</div>
+    <section class="card"><div class="row between"><h3>${pick.mode === "template" ? "In this split" : "Today's workout"}</h3><span class="muted" id="pk-sum">${pickSummary()}</span></div>
+      <div id="pk-list">${pickListHtml()}</div>
+      ${pick.mode === "session" && cfg.splits[pick.key] ? `<label class="row" id="pk-saveback" ${pickChanged() ? "" : "hidden"} style="font-size:14px"><input type="checkbox" id="pk-save" ${pick.saveBack ? "checked" : ""}> Also save these changes to my ${esc(pick.name)} split</label>` : ""}
+    </section>
+    <div class="finish-bar"><div class="inner"><button class="btn primary" data-action="pk-go">${pick.mode === "template" ? "Save split" : "Start workout"}</button></div></div>`;
+}
+async function saveCfg(next, msg){
+  if(!cfgRef || status === "nodb" || status === "readonly"){ toast("Saving isn't available here."); return false; }
+  try { await cfgRef.set(clone(next)); cfg = normCfg(next); if(msg) toast(msg); return true; } catch(e){ handleWriteError(e); return false; }
+}
+async function pickGo(){
+  if(!pick.items.length) return toast("Add at least one exercise.");
+  const next = clone(cfg);
+  for(const n of pick.newEx) if(!next.customEx.some(c => c.name.toLowerCase() === n.name.toLowerCase()) && pick.items.some(i => i.name === n.name)) next.customEx.push(n);
+  if(pick.mode === "template"){
+    const name = (document.getElementById("pk-name")?.value || "").trim().slice(0, 30);
+    if(!name) return toast("Give the split a name.");
+    next.splits[pick.key] = { name, exercises: clone(pick.items) };
+    if(!next.order.includes(pick.key)) next.order.push(pick.key);
+    next.program = "custom";
+    if(await saveCfg(next, "Split saved")){ pick = null; view = "setup"; setupDraft = null; render(); window.scrollTo(0, 0); }
+    return;
+  }
+  if(pick.saveBack && next.splits[pick.key]){ next.splits[pick.key].exercises = clone(pick.items); next.program = "custom"; }
+  if(pick.newEx.length || (pick.saveBack && pickChanged())) await saveCfg(next);
+  draft = { id: newId(), split: pick.key, splitName: pick.name, date: todayStr(), entries: pick.items.map(it => makeEntry(it.name, it.sets, it.reps)) };
+  pick = null; view = "log"; saveDraftLocal(); render(); window.scrollTo(0, 0);
+}
+async function applyPreset(p){
+  if(p === cfg.program) return;
+  const next = clone(cfg);
+  if(p === "custom"){ next.program = "custom"; await saveCfg(next, "Custom program: add or edit your splits below"); render(); return; }
+  if(!(await ask(`Switch to ${PRESETS[p].label}? Your split days are replaced with its days. Past workouts are kept.`, "Switch"))) return;
+  Object.assign(next, presetSplits(p, cfg.setTarget, cfg.repTarget), { program: p });
+  if(await saveCfg(next, `Switched to ${PRESETS[p].label}`)){ setupDraft = null; render(); }
+}
+
 const DEFAULT_CFG = {
-  splits: {
-    upper: { name: "Upper", exercises: ["Bench Press", "Lat Pulldown", "Overhead Press", "Seated Cable Row", "Bicep Curl", "Tricep Pushdown"] },
-    lower: { name: "Lower", exercises: ["Squat", "Romanian Deadlift", "Leg Press", "Leg Curl", "Calf Raise"] }
-  },
+  ...presetSplits("ul", 3, 10), program: "ul", customEx: [],
   repTarget: 10, setTarget: 3, weekMin: 2, weekMax: 4, step: 2.5,
   profile: { age: null, sex: "", activity: "auto", goal: "auto" }
 };
@@ -439,12 +693,12 @@ function renderRun(){
     </section>
     <section class="card"><h3>Log a run</h3>
       <div class="fields">
-        <label class="field" for="r-date">Date<input id="r-date" type="date" value="${todayStr()}" max="${todayStr()}"></label>
+        <label class="field wide" for="r-date">Date<input id="r-date" type="date" value="${todayStr()}" max="${todayStr()}"></label>
         <label class="field" for="r-dist">Distance (km)<input id="r-dist" type="number" inputmode="decimal" step="0.01" min="0" placeholder="e.g. 5.2"></label>
         <label class="field" for="r-time">Time (mm:ss or h:mm:ss)<input id="r-time" type="text" inputmode="numeric" placeholder="e.g. 28:45"></label>
         <label class="field" for="r-hr">Avg heart rate (bpm)<input id="r-hr" type="number" inputmode="numeric" min="40" max="230" placeholder="optional"></label>
         <label class="field" for="r-cad">Cadence (steps/min)<input id="r-cad" type="number" inputmode="numeric" min="60" max="260" placeholder="optional"></label>
-        <label class="field" for="r-name">Name<input id="r-name" type="text" placeholder="optional"></label>
+        <label class="field wide" for="r-name">Name<input id="r-name" type="text" placeholder="optional"></label>
       </div>
       <p class="muted" id="r-pace">Pace appears once you enter distance and time.</p>
       <button class="btn primary" data-action="save-run">Save run</button>
@@ -939,11 +1193,11 @@ function renderBody(){
     </section>
     <section class="card"><h3>Log measurements</h3>
       <div class="fields">
-        <label class="field" for="m-date">Date<input id="m-date" type="date" value="${todayStr()}" max="${todayStr()}"></label>
+        <label class="field wide" for="m-date">Date<input id="m-date" type="date" value="${todayStr()}" max="${todayStr()}"></label>
         <label class="field" for="m-weight">Weight (kg)<input id="m-weight" type="number" inputmode="decimal" step="0.1" min="20" max="350" placeholder="${lw ? kg(lw.weight) : "e.g. 72.5"}"></label>
         <label class="field" for="m-height">Height (cm)<input id="m-height" type="number" inputmode="decimal" step="0.5" min="100" max="250" value="${lh ? kg(lh.height) : ""}" placeholder="e.g. 172"></label>
-        <label class="field" for="m-waist">Waist (cm, optional)<input id="m-waist" type="number" inputmode="decimal" step="0.5" min="30" max="250"></label>
-        <label class="field" for="m-fat">Body fat (%, optional)<input id="m-fat" type="number" inputmode="decimal" step="0.1" min="2" max="70"></label>
+        <label class="field" for="m-waist">Waist cm (optional)<input id="m-waist" type="number" inputmode="decimal" step="0.5" min="30" max="250"></label>
+        <label class="field" for="m-fat">Body fat % (optional)<input id="m-fat" type="number" inputmode="decimal" step="0.1" min="2" max="70"></label>
       </div>
       <button class="btn primary" data-action="save-measure">Save measurements</button>
       <p class="muted">Height carries over from last time, so you only need to update it if it changes.</p>
@@ -995,9 +1249,20 @@ function normCfg(d){
   const c = clone(DEFAULT_CFG);
   if(!d) return c;
   for(const k of ["repTarget","setTarget","weekMin","weekMax","step"]) if(typeof d[k] === "number" && d[k] > 0) c[k] = d[k];
-  if(d.splits) for(const key of ["upper","lower"]) if(d.splits[key] && Array.isArray(d.splits[key].exercises)) {
-    c.splits[key].exercises = d.splits[key].exercises.filter(x => typeof x === "string" && x.trim()).map(x => x.trim());
+  if(d.splits && typeof d.splits === "object"){
+    const sp = {};
+    for(const [k, v] of Object.entries(d.splits)){
+      if(!v || !Array.isArray(v.exercises)) continue;
+      const ex = v.exercises.map(x => typeof x === "string" ? (x.trim() ? { name: x.trim(), sets: c.setTarget, reps: c.repTarget } : null)
+        : x && typeof x.name === "string" && x.name.trim() ? { name: x.name.trim().slice(0, 40), sets: clampInt(x.sets, 1, 10, c.setTarget), reps: clampInt(x.reps, 1, 100, c.repTarget) } : null).filter(Boolean);
+      sp[k] = { name: typeof v.name === "string" && v.name.trim() ? v.name.trim().slice(0, 30) : k, exercises: ex };
+    }
+    if(Object.keys(sp).length){ c.splits = sp; c.order = []; }
   }
+  if(Array.isArray(d.order)) c.order = d.order.filter((k, i, a) => c.splits[k] && a.indexOf(k) === i);
+  for(const k of Object.keys(c.splits)) if(!c.order.includes(k)) c.order.push(k);
+  c.program = PRESETS[d.program] ? d.program : (d.splits && !d.program ? "ul" : c.program);
+  c.customEx = Array.isArray(d.customEx) ? d.customEx.filter(x => x && typeof x.name === "string" && x.name.trim()).map(x => ({ name: x.name.trim().slice(0, 40), group: GROUP_NAME[x.group] && x.group !== "all" ? x.group : "other" })).slice(0, 300) : [];
   if(d.profile && typeof d.profile === "object"){
     const p = d.profile;
     c.profile = { age: p.age > 0 ? Math.round(p.age) : null, sex: p.sex === "male" || p.sex === "female" ? p.sex : "",
@@ -1020,26 +1285,24 @@ function lastFor(name){
   }
   return null;
 }
-function suggestion(name){
+function suggestion(name, tSets, tReps){
   const last = lastFor(name);
   if(!last) return null;
+  tSets = tSets || cfg.setTarget; tReps = tReps || cfg.repTarget;
   const top = Math.max(...last.sets.map(x => num(x.kg)));
-  const hit = last.sets.length >= cfg.setTarget && last.sets.every(x => num(x.reps) >= cfg.repTarget);
+  const hit = last.sets.length >= tSets && last.sets.every(x => num(x.reps) >= tReps);
   return { last, top, hit, next: hit ? roundStep(top + cfg.step) : top };
 }
 function nextSplit(){
-  const last = sessions[0];
-  if(!last) return "upper";
-  return last.split === "upper" ? "lower" : "upper";
+  const order = cfg.order, last = sessions.find(s => order.includes(s.split));
+  if(!last) return order[0];
+  return order[(order.indexOf(last.split) + 1) % order.length];
 }
-function makeEntry(name){
-  const sug = suggestion(name);
+function makeEntry(name, tSets, tReps){
+  tSets = tSets || cfg.setTarget; tReps = tReps || cfg.repTarget;
+  const sug = suggestion(name, tSets, tReps);
   const w = sug ? sug.top : "";
-  return { name, sets: Array.from({length: cfg.setTarget}, () => ({ kg: w, reps: cfg.repTarget, done: false })) };
-}
-function startDraft(key){
-  draft = { id: newId(), split: key, date: todayStr(), entries: cfg.splits[key].exercises.map(makeEntry) };
-  saveDraftLocal(); render(); window.scrollTo(0,0);
+  return { name, target: { sets: tSets, reps: tReps }, sets: Array.from({length: tSets}, () => ({ kg: w, reps: tReps, done: false })) };
 }
 function weekCount(){ const m = mondayStr(); return sessions.filter(s => s.date >= m).length; }
 
@@ -1086,25 +1349,28 @@ function renderLog(){
   if(!draft){
     const nx = nextSplit(), last = sessions[0];
     const btn = key => {
-      const sp = cfg.splits[key];
-      return `<button class="split-btn ${key === nx ? "next" : ""}" data-action="start" data-split="${key}">
+      const sp = cfg.splits[key], sets = sp.exercises.reduce((a, e) => a + e.sets, 0);
+      return `<button class="split-btn ${key === nx ? "next" : ""}" data-action="start" data-split="${esc(key)}">
         ${key === nx ? `<span class="tag">Next up</span>` : `<span class="tag" style="visibility:hidden">.</span>`}
-        <strong>${esc(sp.name)}</strong><span>${sp.exercises.length} exercises · ${cfg.setTarget} × ${cfg.repTarget}</span></button>`;
+        <strong>${esc(sp.name)}</strong><span>${sp.exercises.length} exercises · ~${Math.round(sets * 2.2)} min</span></button>`;
     };
     return `${bannerHtml()}
       ${renderTracker()}
       <section class="card"><h2>Start a workout</h2>
-        <div class="split-pick">${btn("upper")}${btn("lower")}</div>
+        <div class="split-pick">${cfg.order.map(btn).join("")}
+          <button class="split-btn pick-own" data-action="start-custom"><span class="tag" style="visibility:hidden">.</span><strong>Pick</strong><span>Choose exercises for today</span></button></div>
+        <p class="muted">You can add, remove or reorder exercises before you start. Change your program in Setup.</p>
       </section>
       ${last ? `<section class="card"><div class="row between"><h3>Last session</h3><span class="chip info">${esc(last.splitName || cfg.splits[last.split]?.name || "")}</span></div>
         <p class="muted">${esc(fmtDateLong(last.date))} · ${(last.entries||[]).length} exercises · ${(last.entries||[]).reduce((a,e)=>a+e.sets.length,0)} sets</p></section>`
-        : (gotSessions ? `<section class="card empty"><h3>No workouts yet</h3><p class="muted">Pick Upper or Lower above. Your weights carry over to the next session automatically.</p></section>` : "")}`;
+        : (gotSessions ? `<section class="card empty"><h3>No workouts yet</h3><p class="muted">Pick a day above. Your weights carry over to the next session automatically.</p></section>` : "")}`;
   }
-  const sp = cfg.splits[draft.split] || { name: draft.split };
+  const sp = { name: draft.splitName || cfg.splits[draft.split]?.name || draft.split };
   const cards = draft.entries.map((e, ei) => {
-    const sug = suggestion(e.name);
+    const tg = e.target || { sets: cfg.setTarget, reps: cfg.repTarget };
+    const sug = suggestion(e.name, tg.sets, tg.reps);
     const lastLine = sug ? `Last (${esc(fmtDate(sug.last.date))}): ${kg(sug.top)} kg × ${sug.last.sets.map(s => s.reps).join(", ")}` : "First time logging this";
-    const hint = sug && sug.hit && num(e.sets[0]?.kg) < sug.next ? `<button class="hint" data-action="apply" data-e="${ei}" data-kg="${sug.next}">Hit ${cfg.setTarget}×${cfg.repTarget} last time. Use ${kg(sug.next)} kg</button>` : "";
+    const hint = sug && sug.hit && num(e.sets[0]?.kg) < sug.next ? `<button class="hint" data-action="apply" data-e="${ei}" data-kg="${sug.next}">Hit ${tg.sets}×${tg.reps} last time. Use ${kg(sug.next)} kg</button>` : "";
     const sets = e.sets.map((s, si) => `
       <div class="set ${s.done ? "done" : ""}" data-e="${ei}" data-s="${si}">
         <span class="n">${si+1}</span>
@@ -1212,27 +1478,29 @@ function renderProgress(){
 
 function renderSetup(){
   if(!setupDraft) setupDraft = clone(cfg);
-  const list = key => {
-    const ex = setupDraft.splits[key].exercises;
-    return `<section class="card"><h2>${esc(setupDraft.splits[key].name)} day</h2>
-      <ul class="ex-list">${ex.map((n,i) => `<li><span>${esc(n)}</span>
-        <button class="icon-btn" data-action="mv-up" data-k="${key}" data-i="${i}" aria-label="Move ${esc(n)} up" ${i === 0 ? "disabled" : ""}>↑</button>
-        <button class="icon-btn" data-action="mv-dn" data-k="${key}" data-i="${i}" aria-label="Move ${esc(n)} down" ${i === ex.length-1 ? "disabled" : ""}>↓</button>
-        <button class="icon-btn" data-action="rm" data-k="${key}" data-i="${i}" aria-label="Remove ${esc(n)}">✕</button></li>`).join("") || `<li><span class="muted">No exercises yet</span></li>`}</ul>
-      <div class="add-row"><input id="add-${key}" placeholder="Add exercise" aria-label="Add exercise to ${esc(setupDraft.splits[key].name)}"><button class="btn" data-action="setup-add" data-k="${key}">Add</button></div>
-    </section>`;
-  };
+  const progBtns = Object.entries(PRESETS).map(([k, p]) => `<button class="split-btn ${cfg.program === k ? "next" : ""}" data-action="preset" data-p="${k}" aria-pressed="${cfg.program === k}">${cfg.program === k ? `<span class="tag">Current</span>` : `<span class="tag" style="visibility:hidden">.</span>`}<strong style="font-size:20px">${p.label}</strong><span>${p.sub}</span></button>`).join("");
+  const splitRows = cfg.order.map((k, i) => { const sp = cfg.splits[k];
+    return `<li><span><b>${esc(sp.name)}</b><br><small class="muted">${sp.exercises.length} exercises: ${esc(sp.exercises.slice(0, 3).map(e => e.name).join(", "))}${sp.exercises.length > 3 ? "…" : ""}</small></span>
+      <button class="icon-btn" data-action="split-edit" data-k="${esc(k)}">Edit</button>
+      <button class="icon-btn" data-action="split-mv" data-k="${esc(k)}" data-d="-1" ${i === 0 ? "disabled" : ""} aria-label="Move ${esc(sp.name)} earlier">↑</button>
+      <button class="icon-btn" data-action="split-mv" data-k="${esc(k)}" data-d="1" ${i === cfg.order.length - 1 ? "disabled" : ""} aria-label="Move ${esc(sp.name)} later">↓</button>
+      <button class="icon-btn" data-action="split-del" data-k="${esc(k)}" aria-label="Delete ${esc(sp.name)}">✕</button></li>`; }).join("");
   return `${bannerHtml()}
-    ${list("upper")}${list("lower")}
+    <section class="card"><h2>Program</h2><div class="split-pick">${progBtns}</div>
+      <p class="muted">Picking a program replaces your split days with its days. Past workouts are never touched.</p></section>
+    <section class="card"><h2>Your split days</h2>
+      <ul class="ex-list">${splitRows}</ul>
+      <button class="btn" data-action="split-new">+ New split day</button>
+      <p class="muted">Days rotate in this order for "Next up". Editing a day makes your program Custom.</p></section>
     <section class="card"><h2>Targets</h2>
       <div class="fields">
-        <label class="field" for="t-sets">Sets per exercise<input id="t-sets" type="number" inputmode="numeric" min="1" max="10" value="${setupDraft.setTarget}"></label>
-        <label class="field" for="t-reps">Target reps<input id="t-reps" type="number" inputmode="numeric" min="1" max="50" value="${setupDraft.repTarget}"></label>
+        <label class="field" for="t-sets">Default sets<input id="t-sets" type="number" inputmode="numeric" min="1" max="10" value="${setupDraft.setTarget}"></label>
+        <label class="field" for="t-reps">Default reps<input id="t-reps" type="number" inputmode="numeric" min="1" max="50" value="${setupDraft.repTarget}"></label>
         <label class="field" for="t-min">Sessions a week (min)<input id="t-min" type="number" inputmode="numeric" min="1" max="7" value="${setupDraft.weekMin}"></label>
         <label class="field" for="t-max">Sessions a week (max)<input id="t-max" type="number" inputmode="numeric" min="1" max="7" value="${setupDraft.weekMax}"></label>
         <label class="field" for="t-step">Weight step (kg)<input id="t-step" type="number" inputmode="decimal" min="0.5" step="0.5" value="${setupDraft.step}"></label>
       </div>
-      <p class="muted">When you hit every target rep on every set, the next session suggests adding one weight step.</p>
+      <p class="muted">Default sets and reps for exercises you add. When you hit every target rep on every set, the next session suggests adding one weight step.</p>
     </section>
     <button class="btn primary" data-action="save-setup" style="min-height:52px">Save setup</button>
     ${dataCardHtml()}`;
@@ -1243,9 +1511,9 @@ function hubSeg(){
 }
 function render(){
   const main = document.getElementById("main");
-  main.innerHTML = view === "log" ? renderLog() : view === "history" ? renderHistory() : view === "progress" ? renderProgress() : view === "body" ? renderBody() : view === "run" ? renderRun() : view === "compare" ? renderCompare() : view === "food" ? renderFood() : renderSetup();
+  main.innerHTML = view === "log" ? renderLog() : view === "history" ? renderHistory() : view === "progress" ? renderProgress() : view === "body" ? renderBody() : view === "run" ? renderRun() : view === "compare" ? renderCompare() : view === "food" ? renderFood() : view === "pick" && pick ? renderPick() : renderSetup();
   if(view === "progress" || view === "compare" || view === "history") main.insertAdjacentHTML("afterbegin", hubSeg());
-  const navView = view === "history" || view === "compare" ? "progress" : view;
+  const navView = view === "history" || view === "compare" ? "progress" : view === "pick" ? (pick && pick.mode === "template" ? "setup" : "log") : view;
   document.querySelectorAll("[data-view]").forEach(b => b.setAttribute("aria-current", b.dataset.view === navView ? "page" : "false"));
   document.getElementById("finishBar").hidden = !(view === "log" && draft);
   renderWeekChip();
@@ -1261,7 +1529,21 @@ document.addEventListener("click", async ev => {
   const row = b.closest(".set");
   const ei = row ? +row.dataset.e : +b.dataset.e, si = row ? +row.dataset.s : null;
 
-  if(a === "start") return startDraft(b.dataset.split);
+  if(a === "start") return openPicker("session", b.dataset.split);
+  if(a === "start-custom") return openPicker("session", null);
+  if(a === "pk-cancel"){ const back = pick && pick.mode === "template" ? "setup" : "log"; pick = null; view = back; render(); window.scrollTo(0, 0); return; }
+  if(a === "pk-group"){ pick.group = b.dataset.g; pick.q = ""; const q = document.getElementById("pk-q"); if(q) q.value = ""; refreshPick(); return; }
+  if(a === "pk-toggle"){ const n = b.dataset.n, i = pick.items.findIndex(x => x.name.toLowerCase() === n.toLowerCase()); if(i >= 0) pick.items.splice(i, 1); else pick.items.push({ name: n, sets: cfg.setTarget, reps: cfg.repTarget }); refreshPick(); return; }
+  if(a === "pk-new"){ const raw = pick.q.trim().slice(0, 40); if(!raw) return; const n = raw.replace(/\b\w/g, c => c.toUpperCase()); const g = document.getElementById("pk-newg")?.value || (pick.group === "all" ? "other" : pick.group); pick.newEx.push({ name: n, group: g }); if(!(cfg.customEx || []).some(c => c.name.toLowerCase() === n.toLowerCase())) cfg.customEx = [...(cfg.customEx || []), { name: n, group: g }]; pick.items.push({ name: n, sets: cfg.setTarget, reps: cfg.repTarget }); pick.q = ""; const q = document.getElementById("pk-q"); if(q) q.value = ""; if(g !== "other") pick.group = g; refreshPick(); return; }
+  if(a === "pk-sets" || a === "pk-reps"){ const it = pick.items[+b.dataset.i]; if(!it) return; if(a === "pk-sets") it.sets = Math.min(10, Math.max(1, it.sets + +b.dataset.d)); else it.reps = Math.min(100, Math.max(1, it.reps + +b.dataset.d)); refreshPick(); return; }
+  if(a === "pk-mv"){ const i = +b.dataset.i, j = i + +b.dataset.d; if(j < 0 || j >= pick.items.length) return; [pick.items[i], pick.items[j]] = [pick.items[j], pick.items[i]]; refreshPick(); return; }
+  if(a === "pk-rm"){ pick.items.splice(+b.dataset.i, 1); refreshPick(); return; }
+  if(a === "pk-go") return pickGo();
+  if(a === "preset") return applyPreset(b.dataset.p);
+  if(a === "split-edit") return openPicker("template", b.dataset.k);
+  if(a === "split-new") return openPicker("template", null);
+  if(a === "split-mv"){ const o = [...cfg.order], i = o.indexOf(b.dataset.k), j = i + +b.dataset.d; if(j < 0 || j >= o.length) return; [o[i], o[j]] = [o[j], o[i]]; const next = clone(cfg); next.order = o; if(await saveCfg(next)) render(); return; }
+  if(a === "split-del"){ if(cfg.order.length <= 1) return toast("Keep at least one split."); const sp = cfg.splits[b.dataset.k]; if(!(await ask(`Delete the ${sp.name} split? Past workouts are kept.`, "Delete", true))) return; const next = clone(cfg); delete next.splits[b.dataset.k]; next.order = next.order.filter(k => k !== b.dataset.k); next.program = "custom"; if(await saveCfg(next, "Split deleted")) render(); return; }
   if(a === "discard"){ if(await ask("Discard this workout? Nothing from it will be saved.", "Discard", true)){ draft = null; saveDraftLocal(); render(); } return; }
   if(a === "kg-" || a === "kg+" || a === "r-" || a === "r+"){
     const s = draft.entries[ei].sets[si];
@@ -1277,7 +1559,7 @@ document.addEventListener("click", async ev => {
     saveDraftLocal(); return;
   }
   if(a === "apply"){ const w = num(b.dataset.kg); draft.entries[ei].sets.forEach(x => { if(!x.done) x.kg = w; }); saveDraftLocal(); render(); return; }
-  if(a === "add-set"){ const sets = draft.entries[ei].sets; const lastS = sets[sets.length-1] || { kg: "", reps: cfg.repTarget }; sets.push({ kg: lastS.kg, reps: cfg.repTarget, done: false }); saveDraftLocal(); render(); return; }
+  if(a === "add-set"){ const sets = draft.entries[ei].sets; const tr = draft.entries[ei].target?.reps || cfg.repTarget; const lastS = sets[sets.length-1] || { kg: "" }; sets.push({ kg: lastS.kg, reps: tr, done: false }); saveDraftLocal(); render(); return; }
   if(a === "del-set"){ draft.entries[ei].sets.pop(); saveDraftLocal(); render(); return; }
   if(a === "remove-ex"){ draft.entries.splice(ei, 1); saveDraftLocal(); render(); return; }
   if(a === "add-ex"){ const inp = document.getElementById("addEx"); const n = inp.value.trim(); if(!n) return; draft.entries.push(makeEntry(n)); saveDraftLocal(); render(); return; }
@@ -1290,9 +1572,6 @@ document.addEventListener("click", async ev => {
     }
     return;
   }
-  if(a === "mv-up" || a === "mv-dn"){ const ex = setupDraft.splits[b.dataset.k].exercises, i = +b.dataset.i, j = a === "mv-up" ? i-1 : i+1; if(j < 0 || j >= ex.length) return; [ex[i], ex[j]] = [ex[j], ex[i]]; readTargets(); render(); return; }
-  if(a === "rm"){ setupDraft.splits[b.dataset.k].exercises.splice(+b.dataset.i, 1); readTargets(); render(); return; }
-  if(a === "setup-add"){ const inp = document.getElementById("add-" + b.dataset.k); const n = inp.value.trim(); if(!n) return; setupDraft.splits[b.dataset.k].exercises.push(n); readTargets(); render(); document.getElementById("add-" + b.dataset.k)?.focus(); return; }
   if(a === "save-setup") return saveSetup();
   if(a === "save-measure") return saveMeasure();
   if(a === "save-run") return saveRun();
@@ -1323,6 +1602,8 @@ document.addEventListener("input", ev => {
   const inp = ev.target;
   if(inp.id === "r-dist" || inp.id === "r-time") return updatePacePreview();
   if(inp.id === "f-name") return onFoodTyping();
+  if(inp.id === "pk-q"){ pick.q = inp.value; refreshPick(); return; }
+  if(inp.id === "pk-name"){ pick.name = inp.value; return; }
   if(inp.dataset.est !== undefined){ const r = estRows[+inp.dataset.est]; if(r) r.kcalIn = inp.value; const keep = inp.id, pos = inp.selectionStart; refreshEst(); const el = document.getElementById(keep); if(el){ el.focus(); try { el.setSelectionRange(pos, pos); } catch(e){} } return; }
   if(!inp.dataset.field || !draft) return;
   const row = inp.closest(".set"); const s = draft.entries[+row.dataset.e].sets[+row.dataset.s];
@@ -1331,6 +1612,7 @@ document.addEventListener("input", ev => {
 });
 document.addEventListener("change", ev => {
   if(ev.target.id === "progSel"){ progEx = ev.target.value; render(); }
+  if(ev.target.id === "pk-save" && pick){ pick.saveBack = ev.target.checked; }
   if(ev.target.id === "cmpGymA"){ cmpGymA = ev.target.value; cmpGymB = null; render(); }
   if(ev.target.id === "cmpGymB"){ cmpGymB = ev.target.value; render(); }
   if(ev.target.id === "cmpRunA"){ cmpRunA = ev.target.value; cmpRunB = null; render(); }
@@ -1365,7 +1647,7 @@ async function finishWorkout(){
   if(!sessCol || status === "nodb" || status === "readonly") return toast("Saving isn't available here. Your workout is kept on this phone for now.");
   if(openCount && !(await ask(`${openCount} set${openCount > 1 ? "s aren't" : " isn't"} ticked and won't be saved. Save the rest?`, "Save workout"))) return;
   const entries = draft.entries.map(e => ({ name: e.name, sets: e.sets.filter(s => s.done).map(s => ({ kg: num(s.kg), reps: Math.round(num(s.reps)) })) })).filter(e => e.sets.length);
-  const doc = { date: draft.date, ts: Date.now(), split: draft.split, splitName: cfg.splits[draft.split]?.name || draft.split, entries };
+  const doc = { date: draft.date, ts: Date.now(), split: draft.split, splitName: draft.splitName || cfg.splits[draft.split]?.name || draft.split, entries };
   saving = true; const btn = document.getElementById("finishBtn"); btn.disabled = true; btn.textContent = "Saving…";
   try {
     const before = earned(sessions);
@@ -1379,10 +1661,9 @@ async function finishWorkout(){
 
 async function saveSetup(){
   readTargets();
-  if(!setupDraft.splits.upper.exercises.length || !setupDraft.splits.lower.exercises.length) return toast("Each day needs at least one exercise.");
-  if(!cfgRef || status === "nodb" || status === "readonly") return toast("Saving isn't available here.");
-  try { await cfgRef.set(clone(setupDraft)); cfg = normCfg(setupDraft); setupDraft = null; toast("Setup saved"); render(); }
-  catch(e){ handleWriteError(e); }
+  const next = clone(cfg);
+  for(const k of ["setTarget","repTarget","weekMin","weekMax","step"]) next[k] = setupDraft[k];
+  if(await saveCfg(next, "Setup saved")){ setupDraft = null; render(); }
 }
 
 /* ---------- storage ---------- */
@@ -1428,7 +1709,7 @@ if("serviceWorker" in navigator && location.protocol === "https:" && !window.cla
   const timer = setTimeout(() => { if(status === "loading"){ status = "slow"; render(); } }, 10000);
   cfgRef.onSnapshot(s => {
     cfg = normCfg(s.exists ? s.data() : null);
-    if(view !== "setup") render();
+    if(view !== "setup" && view !== "pick") render();
   }, e => {});
   sessCol.orderBy("ts", "desc").limit(1000).onSnapshot(snap => {
     sessions = snap.docs.map(d => Object.assign({ id: d.id }, clone(d.data())));
