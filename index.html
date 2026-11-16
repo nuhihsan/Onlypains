@@ -1323,6 +1323,9 @@ async function saveMeasure(){
 /* ---------- feedback via Telegram ---------- */
 // Your Telegram username (without the @). Messages open in a chat with this account.
 const TELEGRAM_USER = "nuh420";
+// Cloudflare Worker that forwards feedback to Telegram through the bot (see worker/README.md). Empty = use the chat link instead.
+const FEEDBACK_URL = "";
+let fbSending = false;
 const fb = { type: "Idea", msg: "", name: "" };
 function fbText(){
   return `OnlyPains feedback (${fb.type})\n\n${fb.msg.trim()}\n\nFrom: ${fb.name.trim() || "anonymous"}\nSent ${todayStr()}`;
@@ -1335,9 +1338,11 @@ function renderFeedback(){
       <label class="field" for="fb-msg">${fb.type === "Bug" ? "What happened, and what did you expect?" : fb.type === "Idea" ? "What would you like the app to do?" : "Message"}
         <textarea id="fb-msg" rows="6" maxlength="2000" style="height:auto;padding:10px 12px;resize:vertical" placeholder="${fb.type === "Bug" ? "e.g. On the Run tab, importing my Strava file shows 0 km" : "Type here"}">${esc(fb.msg)}</textarea></label>
       <label class="field" for="fb-name">Your name (optional)<input id="fb-name" type="text" maxlength="40" value="${esc(fb.name)}"></label>
-      <button class="btn primary" data-action="fb-send">Send on Telegram</button>
+      ${FEEDBACK_URL ? `<button class="btn primary" data-action="fb-send" ${fbSending ? "disabled" : ""}>${fbSending ? "Sending..." : "Send feedback"}</button>
+      <p class="muted">Goes straight to me. You don't need Telegram.</p>`
+      : `<button class="btn primary" data-action="fb-send">Send on Telegram</button>
       <button class="btn" data-action="fb-copy">Copy message</button>
-      <p class="muted">Telegram opens with your message filled in; just press send. If it doesn't fill in, use Copy message and paste it into the chat.</p>
+      <p class="muted">Telegram opens with your message filled in; just press send. If it doesn't fill in, use Copy message and paste it into the chat.</p>`}
     </section>`;
 }
 function fbSync(){ const m = document.getElementById("fb-msg"), n = document.getElementById("fb-name"); if(m) fb.msg = m.value; if(n) fb.name = n.value; }
@@ -1658,6 +1663,17 @@ document.addEventListener("click", async ev => {
   if(a === "fb-type"){ fbSync(); fb.type = b.dataset.t; render(); return; }
   if(a === "fb-copy"){ fbSync(); if(!fb.msg.trim()) return toast("Write your feedback first."); return fbCopy(); }
   if(a === "fb-send"){ fbSync(); if(!fb.msg.trim()) return toast("Write your feedback first.");
+    if(FEEDBACK_URL){
+      if(fbSending) return; fbSending = true; render();
+      let ok = false;
+      try { const r = await fetch(FEEDBACK_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: fb.type, msg: fb.msg.trim(), name: fb.name.trim() }) }); ok = r.ok; } catch(e){}
+      fbSending = false;
+      if(ok){ fb.msg = ""; render(); return toast("Sent. Thanks for the feedback!"); }
+      render();
+      if(!navigator.onLine) return toast("You're offline. Try again when you're connected.");
+      if(!TELEGRAM_USER) return toast("Couldn't send. Try again in a bit.");
+      if(!(await ask("Couldn't send it right now. Open Telegram with your message filled in instead?", "Open Telegram"))) return;
+    }
     if(!TELEGRAM_USER){ await fbCopy(); return toast("Telegram link isn't set up yet. Message copied instead."); }
     window.open(`https://t.me/${TELEGRAM_USER}?text=${encodeURIComponent(fbText())}`, "_blank", "noopener");
     fb.msg = ""; setTimeout(render, 500); return; }
