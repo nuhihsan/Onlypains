@@ -229,7 +229,7 @@ details summary{cursor:pointer;min-height:32px;display:flex;align-items:center}
 
 <script>
 /* ---------- exercise library, programs & the exercise picker ---------- */
-const GROUPS = [["chest","Chest"],["back","Back"],["shoulders","Shoulders"],["biceps","Biceps"],["triceps","Triceps"],["legs","Legs"],["glutes","Glutes"],["core","Core"]];
+const GROUPS = [["chest","Chest"],["back","Back"],["shoulders","Shoulders"],["biceps","Biceps"],["triceps","Triceps"],["legs","Legs"],["glutes","Glutes"],["core","Abs & Core"]];
 const GROUP_NAME = Object.fromEntries([...GROUPS, ["other","Other"], ["all","All"]]);
 const EX_LIB = `chest|Bench Press|barbell
 chest|Incline Bench Press|barbell
@@ -312,11 +312,24 @@ core|Cable Crunch|cable
 core|Hanging Leg Raise|bodyweight
 core|Russian Twist|bodyweight
 core|Ab Wheel Rollout|bodyweight
-core|Mountain Climbers|bodyweight`.split("\n").map(l => { const [group, name, eq] = l.split("|"); return { group, name, eq }; });
+core|Mountain Climbers|bodyweight
+core|Ab Crunch Machine|machine
+core|Decline Crunch|bodyweight
+core|Reverse Crunch|bodyweight
+core|Bicycle Crunch|bodyweight
+core|Weighted Sit-Up|bodyweight
+core|Lying Leg Raise|bodyweight
+core|Captain's Chair Leg Raise|machine
+core|Toes to Bar|bodyweight
+core|V-Up|bodyweight
+core|Hollow Hold|bodyweight
+core|Dead Bug|bodyweight
+core|Cable Woodchopper|cable
+core|Pallof Press|cable`.split("\n").map(l => { const [group, name, eq] = l.split("|"); return { group, name, eq }; });
 const PRESETS = {
   ul: { label: "Upper / Lower", sub: "2 days that alternate", splits: [
-    ["upper", "Upper", ["Bench Press", "Lat Pulldown", "Overhead Press", "Seated Cable Row", "Bicep Curl", "Tricep Pushdown"]],
-    ["lower", "Lower", ["Squat", "Romanian Deadlift", "Leg Press", "Leg Curl", "Hip Adduction Machine", "Calf Raise"]]] },
+    ["upper", "Upper", ["Bench Press", "Lat Pulldown", "Overhead Press", "Seated Cable Row", "Bicep Curl", "Tricep Pushdown", "Cable Crunch"]],
+    ["lower", "Lower", ["Squat", "Romanian Deadlift", "Leg Press", "Leg Curl", "Hip Adduction Machine", "Calf Raise", "Hanging Leg Raise"]]] },
   full: { label: "Full body", sub: "A and B days, whole body each time", splits: [
     ["fullA", "Full body A", ["Squat", "Bench Press", "Barbell Row", "Overhead Press", "Romanian Deadlift", "Plank"]],
     ["fullB", "Full body B", ["Deadlift", "Incline Dumbbell Press", "Lat Pulldown", "Lunges", "Lateral Raise", "Hanging Leg Raise"]]] },
@@ -371,7 +384,10 @@ const EX_MUSCLES = {
   "Romanian Deadlift": "hamstrings,glutes|lower_back", "Stiff-Leg Deadlift": "hamstrings|glutes,lower_back", "Calf Raise": "calves|", "Seated Calf Raise": "calves|",
   "Hip Thrust": "glutes|hamstrings", "Glute Bridge": "glutes|hamstrings", "Sumo Deadlift": "glutes,quads,hamstrings|lower_back,traps", "Cable Kickback": "glutes|hamstrings", "Hip Abduction Machine": "glutes|", "Hip Adduction Machine": "adductors|glutes",
   "Plank": "abs|obliques,delt_front", "Side Plank": "obliques|abs", "Crunch": "abs|", "Cable Crunch": "abs|obliques", "Hanging Leg Raise": "abs|obliques,forearms",
-  "Russian Twist": "obliques|abs", "Ab Wheel Rollout": "abs|lats,delt_front", "Mountain Climbers": "abs|quads,delt_front"
+  "Russian Twist": "obliques|abs", "Ab Wheel Rollout": "abs|lats,delt_front", "Mountain Climbers": "abs|quads,delt_front",
+  "Ab Crunch Machine": "abs|obliques", "Decline Crunch": "abs|obliques", "Reverse Crunch": "abs|obliques", "Bicycle Crunch": "abs,obliques|", "Weighted Sit-Up": "abs|obliques",
+  "Lying Leg Raise": "abs|obliques", "Captain's Chair Leg Raise": "abs|obliques", "Toes to Bar": "abs|obliques,lats,forearms", "V-Up": "abs|obliques", "Hollow Hold": "abs|obliques",
+  "Dead Bug": "abs|obliques", "Cable Woodchopper": "obliques|abs,delt_front", "Pallof Press": "obliques|abs"
 };
 function exMuscles(name){
   const v = EX_MUSCLES[Object.keys(EX_MUSCLES).find(k => k.toLowerCase() === String(name).toLowerCase())];
@@ -1384,6 +1400,12 @@ function normCfg(d){
     ex.splice(ci >= 0 ? ci : ex.length, 0, { name: "Hip Adduction Machine", sets: c.setTarget, reps: c.repTarget });
   }
   c.migAdduction = true;
+  // one-time: finish Upper and Lower with an abs exercise if they have none (only once, so removing it later sticks)
+  if(!d.migAbs) for(const [k, ex] of [["upper", "Cable Crunch"], ["lower", "Hanging Leg Raise"]]){
+    const sp = c.splits[k];
+    if(sp && !sp.exercises.some(x => exGroup(x.name) === "core")) sp.exercises.push({ name: ex, sets: c.setTarget, reps: c.repTarget });
+  }
+  c.migAbs = true;
   c.program = PRESETS[d.program] ? d.program : (d.splits && !d.program ? "ul" : c.program);
   c.customEx = Array.isArray(d.customEx) ? d.customEx.filter(x => x && typeof x.name === "string" && x.name.trim()).map(x => ({ name: x.name.trim().slice(0, 40), group: GROUP_NAME[x.group] && x.group !== "all" ? x.group : "other" })).slice(0, 300) : [];
   if(d.profile && typeof d.profile === "object"){
