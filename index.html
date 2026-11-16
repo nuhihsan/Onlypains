@@ -42,9 +42,10 @@
   color-scheme:dark;
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html,body{height:100%;margin:0}
 body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.4;-webkit-tap-highlight-color:transparent}
-button,input,select{font:inherit;color:inherit}
+button,input,select,textarea{font:inherit;color:inherit}
 button{cursor:pointer}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
@@ -100,8 +101,8 @@ main{flex:1;padding:16px 16px 120px;display:flex;flex-direction:column;gap:14px}
 .finish-bar .inner{max-width:528px;margin:0 auto}
 .finish-bar .btn{width:100%;min-height:52px;font-size:17px}
 nav{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);z-index:6}
-nav .inner{max-width:560px;margin:0 auto;display:grid;grid-template-columns:repeat(5,1fr)}
-nav button{border:0;background:transparent;height:64px;font-weight:600;font-size:13px;color:var(--muted);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-top:3px solid transparent}
+nav .inner{max-width:560px;margin:0 auto;display:grid;grid-template-columns:repeat(6,1fr)}
+nav button{border:0;background:transparent;height:64px;font-weight:600;font-size:12px;min-width:0;padding:0;color:var(--muted);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-top:3px solid transparent}
 nav button[aria-current="page"]{color:var(--accent);border-top-color:var(--accent)}
 nav svg{width:22px;height:22px}
 .hist-item{display:flex;flex-direction:column;gap:8px}
@@ -223,6 +224,7 @@ details summary{cursor:pointer;min-height:32px;display:flex;align-items:center}
   <button data-view="food"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3v8a2 2 0 0 0 4 0V3M9 11v10M17 21V3c-2 1-3 4-3 7h3"/></svg>Food</button>
   <button data-view="progress"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19h16M5 15l4-4 4 3 6-7"/></svg>Progress</button>
   <button data-view="body"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8.5 10a5 5 0 0 1 7 0M12 10l1.5-2"/></svg>Body</button>
+  <button data-view="feedback"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H10l-5 4v-4H4z"/><path d="M8 9.5h8M8 12.5h5"/></svg>Feedback</button>
 </div></nav>
 
 <script>
@@ -297,6 +299,7 @@ legs|Romanian Deadlift|barbell
 legs|Stiff-Leg Deadlift|barbell
 legs|Calf Raise|machine
 legs|Seated Calf Raise|machine
+legs|Hip Adduction Machine|machine
 glutes|Hip Thrust|barbell
 glutes|Glute Bridge|bodyweight
 glutes|Sumo Deadlift|barbell
@@ -313,7 +316,7 @@ core|Mountain Climbers|bodyweight`.split("\n").map(l => { const [group, name, eq
 const PRESETS = {
   ul: { label: "Upper / Lower", sub: "2 days that alternate", splits: [
     ["upper", "Upper", ["Bench Press", "Lat Pulldown", "Overhead Press", "Seated Cable Row", "Bicep Curl", "Tricep Pushdown"]],
-    ["lower", "Lower", ["Squat", "Romanian Deadlift", "Leg Press", "Leg Curl", "Calf Raise"]]] },
+    ["lower", "Lower", ["Squat", "Romanian Deadlift", "Leg Press", "Leg Curl", "Hip Adduction Machine", "Calf Raise"]]] },
   full: { label: "Full body", sub: "A and B days, whole body each time", splits: [
     ["fullA", "Full body A", ["Squat", "Bench Press", "Barbell Row", "Overhead Press", "Romanian Deadlift", "Plank"]],
     ["fullB", "Full body B", ["Deadlift", "Incline Dumbbell Press", "Lat Pulldown", "Lunges", "Lateral Raise", "Hanging Leg Raise"]]] },
@@ -345,8 +348,8 @@ function allExercises(){
   return out;
 }
 /* ---------- muscle map: front and back view, main muscles bright, helpers faint ---------- */
-const MUSCLE_NAME = { chest: "Chest", chest_upper: "Upper chest", delt_front: "Front delts", delt_side: "Side delts", delt_rear: "Rear delts", traps: "Traps", lats: "Lats", lower_back: "Lower back", biceps: "Biceps", triceps: "Triceps", forearms: "Forearms", abs: "Abs", obliques: "Obliques", quads: "Quads", hamstrings: "Hamstrings", glutes: "Glutes", calves: "Calves" };
-const GROUP_MUSCLES = { chest: [["chest","chest_upper"],[]], back: [["lats","traps","lower_back"],[]], shoulders: [["delt_front","delt_side","delt_rear"],[]], biceps: [["biceps"],["forearms"]], triceps: [["triceps"],[]], legs: [["quads","hamstrings","calves"],["glutes"]], glutes: [["glutes"],["hamstrings"]], core: [["abs","obliques"],[]], other: [[],[]] };
+const MUSCLE_NAME = { chest: "Chest", chest_upper: "Upper chest", delt_front: "Front delts", delt_side: "Side delts", delt_rear: "Rear delts", traps: "Traps", lats: "Lats", lower_back: "Lower back", biceps: "Biceps", triceps: "Triceps", forearms: "Forearms", abs: "Abs", obliques: "Obliques", quads: "Quads", adductors: "Inner thighs", hamstrings: "Hamstrings", glutes: "Glutes", calves: "Calves" };
+const GROUP_MUSCLES = { chest: [["chest","chest_upper"],[]], back: [["lats","traps","lower_back"],[]], shoulders: [["delt_front","delt_side","delt_rear"],[]], biceps: [["biceps"],["forearms"]], triceps: [["triceps"],[]], legs: [["quads","hamstrings","calves"],["glutes","adductors"]], glutes: [["glutes"],["hamstrings"]], core: [["abs","obliques"],[]], other: [[],[]] };
 const EX_MUSCLES = {
   "Bench Press": "chest|delt_front,triceps", "Incline Bench Press": "chest_upper|delt_front,triceps", "Decline Bench Press": "chest|triceps",
   "Dumbbell Bench Press": "chest|delt_front,triceps", "Incline Dumbbell Press": "chest_upper,delt_front|triceps", "Dumbbell Flyes": "chest,chest_upper|delt_front",
@@ -366,7 +369,7 @@ const EX_MUSCLES = {
   "Squat": "quads,glutes|hamstrings,lower_back", "Front Squat": "quads|glutes,abs", "Leg Press": "quads,glutes|hamstrings", "Hack Squat": "quads|glutes", "Goblet Squat": "quads,glutes|abs",
   "Bulgarian Split Squat": "quads,glutes|hamstrings", "Lunges": "quads,glutes|hamstrings", "Step-Up": "quads,glutes|hamstrings", "Leg Extension": "quads|", "Leg Curl": "hamstrings|calves",
   "Romanian Deadlift": "hamstrings,glutes|lower_back", "Stiff-Leg Deadlift": "hamstrings|glutes,lower_back", "Calf Raise": "calves|", "Seated Calf Raise": "calves|",
-  "Hip Thrust": "glutes|hamstrings", "Glute Bridge": "glutes|hamstrings", "Sumo Deadlift": "glutes,quads,hamstrings|lower_back,traps", "Cable Kickback": "glutes|hamstrings", "Hip Abduction Machine": "glutes|",
+  "Hip Thrust": "glutes|hamstrings", "Glute Bridge": "glutes|hamstrings", "Sumo Deadlift": "glutes,quads,hamstrings|lower_back,traps", "Cable Kickback": "glutes|hamstrings", "Hip Abduction Machine": "glutes|", "Hip Adduction Machine": "adductors|glutes",
   "Plank": "abs|obliques,delt_front", "Side Plank": "obliques|abs", "Crunch": "abs|", "Cable Crunch": "abs|obliques", "Hanging Leg Raise": "abs|obliques,forearms",
   "Russian Twist": "obliques|abs", "Ab Wheel Rollout": "abs|lats,delt_front", "Mountain Climbers": "abs|quads,delt_front"
 };
@@ -394,7 +397,7 @@ function bodySvg(prim, sec){
       <path d="M${c+m*0.8} 23.2 L${c+m*8.9} 23.2 Q${c+m*8.6} 27.2 ${c+m*6.4} 28.4 L${c+m*0.8} 28.6Z" ${f("chest")}/>
       ${e(c+m*12.4, 28.6, 2.3, 4.7, f("biceps"))}${e(c+m*13.8, 38.4, 2.1, 5.4, f("forearms"))}${e(c+m*14.4, 46, 1.6, 2.2, dim)}
       <path d="M${c+m*4.6} 29.6 L${c+m*8.3} 29 Q${c+m*8.7} 36 ${c+m*7.5} 41 L${c+m*4.6} 44Z" ${f("obliques")}/>
-      ${e(c+m*4.7, 58.6, 3.9, 9.4, f("quads"))}${e(c+m*4.7, 69.6, 2.2, 1.5, dim)}${e(c+m*4.8, 78.6, 2.4, 7, f("calves"))}${e(c+m*5.2, 88.2, 2.6, 1.5, dim)}`)}
+      ${e(c+m*4.7, 58.6, 3.9, 9.4, f("quads"))}${e(c+m*1.7, 55.4, 1.4, 5.2, f("adductors"))}${e(c+m*4.7, 69.6, 2.2, 1.5, dim)}${e(c+m*4.8, 78.6, 2.4, 7, f("calves"))}${e(c+m*5.2, 88.2, 2.6, 1.5, dim)}`)}
     <rect x="${c-4}" y="29.2" width="8" height="15" rx="2" ${f("abs")}/>
     <path d="M${c} 29.6V43.8M${c-3.8} 33.2H${c+3.8}M${c-3.8} 37H${c+3.8}M${c-3.8} 40.6H${c+3.8}" stroke="var(--surface)" stroke-width=".55"/>
     <path d="M${c-7.6} 44.4 L${c+7.6} 44.4 L${c+5.4} 49 L${c-5.4} 49Z" ${dim}/>`;
@@ -457,6 +460,8 @@ function refreshPick(){
   const g = document.getElementById("pk-grid"); if(g) g.innerHTML = pickGridHtml();
   const l = document.getElementById("pk-list"); if(l) l.innerHTML = pickListHtml();
   const s = document.getElementById("pk-sum"); if(s) s.textContent = pickSummary();
+  const bar = document.getElementById("pk-selbar"); if(bar) bar.hidden = !pick.items.length;
+  const sc = document.getElementById("pk-selcount"); if(sc) sc.textContent = `${pick.items.length} selected`;
   const sb = document.getElementById("pk-saveback"); if(sb) sb.hidden = !(pick.mode === "session" && pickChanged());
   document.querySelectorAll(".gchip").forEach(c => { const on = !pick.q.trim() && c.dataset.g === pick.group; c.classList.toggle("on", on); c.setAttribute("aria-pressed", on); });
 }
@@ -467,6 +472,7 @@ function renderPick(){
       : `<p class="muted">${esc(pick.name)} day. Tap exercises to add or remove them for today.</p>`}
     <div class="groups" role="group" aria-label="Muscle group">${groups.map(([k, l]) => `<button class="gchip ${k === pick.group && !pick.q ? "on" : ""}" data-action="pk-group" data-g="${k}" aria-pressed="${k === pick.group}">${figSvg(k === "other" ? "all" : k)}${l}</button>`).join("")}</div>
     <input id="pk-q" class="search" type="search" placeholder="Search exercises" value="${esc(pick.q)}" aria-label="Search exercises" autocomplete="off">
+    <div class="row between" id="pk-selbar" ${pick.items.length ? "" : "hidden"}><span class="muted" id="pk-selcount">${pick.items.length} selected</span><button class="btn small" data-action="pk-clear">Deselect all</button></div>
     <div class="ex-grid" id="pk-grid">${pickGridHtml()}</div>
     <section class="card"><div class="row between"><h3>${pick.mode === "template" ? "In this split" : "Today's workout"}</h3><span class="muted" id="pk-sum">${pickSummary()}</span></div>
       <div id="pk-list">${pickListHtml()}</div>
@@ -1222,6 +1228,18 @@ function dataCardHtml(){
 }
 
 /* ---------- body measurements ---------- */
+// tape measurements in cm: [key, label, how to measure]
+const CIRC = [
+  ["neck", "Neck", "just below the Adam's apple"],
+  ["shoulders", "Shoulders", "around the widest point of the delts"],
+  ["chest", "Chest", "across the nipples, arms down, normal breath"],
+  ["arm", "Biceps", "flexed, at the peak"],
+  ["forearm", "Forearm", "widest point, arm straight"],
+  ["waist", "Waist", "at the navel, relaxed"],
+  ["hips", "Hips", "widest point of the glutes"],
+  ["thigh", "Thigh", "widest point, standing"],
+  ["calf", "Calf", "widest point, standing"]
+];
 function latest(field){ for(const m of measures) if(typeof m[field] === "number" && m[field] > 0) return m; return null; }
 function bmiInfo(bmi){
   // Asian BMI cut-offs, as used in Malaysia's clinical practice guidelines
@@ -1238,8 +1256,16 @@ function renderBody(){
   const wPts = measures.filter(m => m.weight > 0).slice().reverse().map(m => ({ date: m.date, kg: m.weight }));
   const change = wPts.length > 1 ? wPts[wPts.length-1].kg - wPts[0].kg : null;
   const opt = (m, k, u) => m[k] > 0 ? `${kg(m[k])} ${u}` : null;
-  const rows = measures.slice(0, 40).map(m => `<div class="m-row"><span><b>${esc(fmtDate(m.date))}</b> · ${[opt(m,"weight","kg"), opt(m,"height","cm"), m.waist > 0 ? `waist ${kg(m.waist)} cm` : null, m.bodyFat > 0 ? `${kg(m.bodyFat)}% fat` : null].filter(Boolean).join(" · ")}</span>
+  const rows = measures.slice(0, 40).map(m => `<div class="m-row"><span><b>${esc(fmtDate(m.date))}</b> · ${[opt(m,"weight","kg"), opt(m,"height","cm"), m.bodyFat > 0 ? `${kg(m.bodyFat)}% fat` : null, ...CIRC.filter(([k]) => m[k] > 0).map(([k, l]) => `${l.toLowerCase()} ${kg(m[k])}`)].filter(Boolean).join(" · ")}</span>
     <button class="icon-btn" data-action="del-measure" data-id="${esc(m.id)}" aria-label="Delete entry from ${esc(fmtDate(m.date))}">✕</button></div>`).join("");
+  const tapeRows = CIRC.map(([k, l]) => {
+    const pts = measures.filter(m => m[k] > 0); if(!pts.length) return "";
+    const last = pts[0], first = pts[pts.length - 1], d = Math.round((last[k] - first[k]) * 10) / 10;
+    return `<tr><th>${l}</th><td>${kg(last[k])}</td><td>${pts.length > 1 ? `<span class="dl ${d > 0 ? "up" : d < 0 ? "down" : ""}">${d > 0 ? "+" : ""}${kg(d)}</span>` : "–"}</td><td class="muted" style="font-size:12px">${pts.length > 1 ? esc(fmtDate(first.date)) : esc(fmtDate(last.date))}</td></tr>`;
+  }).join("");
+  const tapeCard = tapeRows ? `<section class="card"><h3>Tape measurements (cm)</h3>
+      <div class="tbl"><table class="cmp"><thead><tr><th></th><th>Latest</th><th>Change</th><th>Since</th></tr></thead><tbody>${tapeRows}</tbody></table></div>
+      <p class="muted">Green means bigger, red means smaller. For waist, smaller is usually the goal.</p></section>` : "";
   return `${bannerHtml()}
     <section class="card"><h2>Body</h2>
       <div class="tiles">
@@ -1254,14 +1280,18 @@ function renderBody(){
         <label class="field wide" for="m-date">Date<input id="m-date" type="date" value="${todayStr()}" max="${todayStr()}"></label>
         <label class="field" for="m-weight">Weight (kg)<input id="m-weight" type="number" inputmode="decimal" step="0.1" min="20" max="350" placeholder="${lw ? kg(lw.weight) : "e.g. 72.5"}"></label>
         <label class="field" for="m-height">Height (cm)<input id="m-height" type="number" inputmode="decimal" step="0.5" min="100" max="250" value="${lh ? kg(lh.height) : ""}" placeholder="e.g. 172"></label>
-        <label class="field" for="m-waist">Waist cm (optional)<input id="m-waist" type="number" inputmode="decimal" step="0.5" min="30" max="250"></label>
-        <label class="field" for="m-fat">Body fat % (optional)<input id="m-fat" type="number" inputmode="decimal" step="0.1" min="2" max="70"></label>
+        <label class="field wide" for="m-fat">Body fat % (optional)<input id="m-fat" type="number" inputmode="decimal" step="0.1" min="2" max="70"></label>
       </div>
+      <details ${CIRC.some(([k]) => latest(k)) ? "open" : ""}><summary><b>Tape measurements, cm (optional)</b></summary>
+        <p class="muted" style="margin:6px 0 10px">Measure the same side each time, in the morning before training, tape snug but not squeezing. Fill in only what you want to track.</p>
+        <div class="fields">${CIRC.map(([k, l, how]) => { const lm = latest(k); return `<label class="field" for="m-${k}">${l}<input id="m-${k}" type="number" inputmode="decimal" step="0.1" min="10" max="250" placeholder="${lm ? "last " + kg(lm[k]) : ""}"><span style="font-weight:400;font-size:12px">${esc(how)}</span></label>`; }).join("")}</div>
+      </details>
       <button class="btn primary" data-action="save-measure">Save measurements</button>
       <p class="muted">Height carries over from last time, so you only need to update it if it changes.</p>
     </section>
     <section class="card chart"><div class="row between"><h3>Weight (kg)</h3>${change !== null ? `<span class="chip info">${change > 0 ? "+" : ""}${kg(Math.round(change*10)/10)} kg since ${esc(fmtDate(wPts[0].date))}</span>` : ""}</div>
       ${chartSvg(wPts, "Log your weight on two different days to see a trend line.", "Body weight")}</section>
+    ${tapeCard}
     ${rows ? `<section class="card"><h3>History</h3>${rows}</section>` : ""}
     <section class="card"><h2>Your details</h2>
       <div class="fields">
@@ -1279,15 +1309,44 @@ async function saveMeasure(){
   const g = id => { const v = document.getElementById(id).value; return v === "" ? null : num(v); };
   const date = document.getElementById("m-date").value || todayStr();
   const doc = { date, ts: Date.now() };
-  const w = g("m-weight"), h = g("m-height"), wa = g("m-waist"), bf = g("m-fat");
+  const w = g("m-weight"), h = g("m-height"), bf = g("m-fat");
+  let tape = 0;
+  for(const [k, l] of CIRC){ const v = g("m-" + k); if(v === null || v <= 0) continue; if(v < 10 || v > 250) return toast(`${l} looks off. Enter it in cm.`); doc[k] = v; tape++; }
   if(w !== null){ if(w < 20 || w > 350) return toast("Weight looks off. Enter it in kg."); doc.weight = w; }
   if(h !== null){ if(h < 100 || h > 250) return toast("Height looks off. Enter it in cm."); doc.height = h; }
-  if(wa !== null && wa > 0) doc.waist = wa;
   if(bf !== null && bf > 0) doc.bodyFat = bf;
-  if(w === null && wa === null && bf === null && (h === null || (latest("height") && h === latest("height").height))) return toast("Enter at least your weight or a measurement.");
+  if(w === null && !tape && bf === null && (h === null || (latest("height") && h === latest("height").height))) return toast("Enter at least your weight or a measurement.");
   try { await mCol.doc("m" + doc.ts).set(doc); toast("Measurements saved"); }
   catch(e){ handleWriteError(e); }
 }
+
+/* ---------- feedback via Telegram ---------- */
+// Your Telegram username (without the @). Messages open in a chat with this account.
+const TELEGRAM_USER = "nuh420";
+// Cloudflare Worker that forwards feedback to Telegram through the bot (see worker/README.md). Empty = use the chat link instead.
+const FEEDBACK_URL = "";
+let fbSending = false;
+const fb = { type: "Idea", msg: "", name: "" };
+function fbText(){
+  return `OnlyPains feedback (${fb.type})\n\n${fb.msg.trim()}\n\nFrom: ${fb.name.trim() || "anonymous"}\nSent ${todayStr()}`;
+}
+function renderFeedback(){
+  const types = ["Bug", "Idea", "Other"];
+  return `<section class="card"><h2>Feedback</h2>
+      <p class="muted">Found a bug or want something added? Write it here and send it straight to me on Telegram.</p>
+      <div class="seg" role="group" aria-label="Feedback type">${types.map(t => `<button class="${fb.type === t ? "on" : ""}" data-action="fb-type" data-t="${t}" aria-pressed="${fb.type === t}">${t}</button>`).join("")}</div>
+      <label class="field" for="fb-msg">${fb.type === "Bug" ? "What happened, and what did you expect?" : fb.type === "Idea" ? "What would you like the app to do?" : "Message"}
+        <textarea id="fb-msg" rows="6" maxlength="2000" style="height:auto;padding:10px 12px;resize:vertical" placeholder="${fb.type === "Bug" ? "e.g. On the Run tab, importing my Strava file shows 0 km" : "Type here"}">${esc(fb.msg)}</textarea></label>
+      <label class="field" for="fb-name">Your name (optional)<input id="fb-name" type="text" maxlength="40" value="${esc(fb.name)}"></label>
+      ${FEEDBACK_URL ? `<button class="btn primary" data-action="fb-send" ${fbSending ? "disabled" : ""}>${fbSending ? "Sending..." : "Send feedback"}</button>
+      <p class="muted">Goes straight to me. You don't need Telegram.</p>`
+      : `<button class="btn primary" data-action="fb-send">Send on Telegram</button>
+      <button class="btn" data-action="fb-copy">Copy message</button>
+      <p class="muted">Telegram opens with your message filled in; just press send. If it doesn't fill in, use Copy message and paste it into the chat.</p>`}
+    </section>`;
+}
+function fbSync(){ const m = document.getElementById("fb-msg"), n = document.getElementById("fb-name"); if(m) fb.msg = m.value; if(n) fb.name = n.value; }
+async function fbCopy(){ try { await navigator.clipboard.writeText(fbText()); toast("Message copied"); } catch(e){ toast("Couldn't copy. Select the text and copy it instead."); } }
 
 /* ---------- helpers ---------- */
 function clone(o){ return JSON.parse(JSON.stringify(o)); }
@@ -1319,6 +1378,12 @@ function normCfg(d){
   }
   if(Array.isArray(d.order)) c.order = d.order.filter((k, i, a) => c.splits[k] && a.indexOf(k) === i);
   for(const k of Object.keys(c.splits)) if(!c.order.includes(k)) c.order.push(k);
+  // one-time: add Hip Adduction to an existing Lower split (only once, so removing it later sticks)
+  if(!d.migAdduction && c.splits.lower && !c.splits.lower.exercises.some(x => /hip adduction/i.test(x.name))){
+    const ex = c.splits.lower.exercises, ci = ex.findIndex(x => /calf/i.test(x.name));
+    ex.splice(ci >= 0 ? ci : ex.length, 0, { name: "Hip Adduction Machine", sets: c.setTarget, reps: c.repTarget });
+  }
+  c.migAdduction = true;
   c.program = PRESETS[d.program] ? d.program : (d.splits && !d.program ? "ul" : c.program);
   c.customEx = Array.isArray(d.customEx) ? d.customEx.filter(x => x && typeof x.name === "string" && x.name.trim()).map(x => ({ name: x.name.trim().slice(0, 40), group: GROUP_NAME[x.group] && x.group !== "all" ? x.group : "other" })).slice(0, 300) : [];
   if(d.profile && typeof d.profile === "object"){
@@ -1569,7 +1634,7 @@ function hubSeg(){
 }
 function render(){
   const main = document.getElementById("main");
-  main.innerHTML = view === "log" ? renderLog() : view === "history" ? renderHistory() : view === "progress" ? renderProgress() : view === "body" ? renderBody() : view === "run" ? renderRun() : view === "compare" ? renderCompare() : view === "food" ? renderFood() : view === "pick" && pick ? renderPick() : renderSetup();
+  main.innerHTML = view === "log" ? renderLog() : view === "history" ? renderHistory() : view === "progress" ? renderProgress() : view === "body" ? renderBody() : view === "run" ? renderRun() : view === "compare" ? renderCompare() : view === "food" ? renderFood() : view === "feedback" ? renderFeedback() : view === "pick" && pick ? renderPick() : renderSetup();
   if(view === "progress" || view === "compare" || view === "history") main.insertAdjacentHTML("afterbegin", hubSeg());
   const navView = view === "history" || view === "compare" ? "progress" : view === "pick" ? (pick && pick.mode === "template" ? "setup" : "log") : view;
   document.querySelectorAll("[data-view]").forEach(b => b.setAttribute("aria-current", b.dataset.view === navView ? "page" : "false"));
@@ -1581,7 +1646,7 @@ function render(){
 function setEl(ei, si){ return document.querySelector(`.set[data-e="${ei}"][data-s="${si}"]`); }
 document.addEventListener("click", async ev => {
   const nb = ev.target.closest("[data-view]");
-  if(nb){ if(view === "setup" && nb.dataset.view !== "setup") setupDraft = null; view = nb.dataset.view; render(); window.scrollTo(0,0); return; }
+  if(nb){ if(view === "feedback") fbSync(); if(view === "setup" && nb.dataset.view !== "setup") setupDraft = null; view = nb.dataset.view; render(); window.scrollTo(0,0); return; }
   const b = ev.target.closest("[data-action]"); if(!b) return;
   const a = b.dataset.action;
   const row = b.closest(".set");
@@ -1595,6 +1660,24 @@ document.addEventListener("click", async ev => {
   if(a === "pk-new"){ const raw = pick.q.trim().slice(0, 40); if(!raw) return; const n = raw.replace(/\b\w/g, c => c.toUpperCase()); const g = document.getElementById("pk-newg")?.value || (pick.group === "all" ? "other" : pick.group); if(!pick.newEx.some(c => c.name.toLowerCase() === n.toLowerCase())) pick.newEx.push({ name: n, group: g }); pick.items.push({ name: n, sets: cfg.setTarget, reps: cfg.repTarget }); pick.q = ""; const q = document.getElementById("pk-q"); if(q) q.value = ""; if(g !== "other") pick.group = g; refreshPick(); return; }
   if(a === "pk-sets" || a === "pk-reps"){ const it = pick.items[+b.dataset.i]; if(!it) return; if(a === "pk-sets") it.sets = Math.min(10, Math.max(1, it.sets + +b.dataset.d)); else it.reps = Math.min(100, Math.max(1, it.reps + +b.dataset.d)); refreshPick(); return; }
   if(a === "pk-mv"){ const i = +b.dataset.i, j = i + +b.dataset.d; if(j < 0 || j >= pick.items.length) return; [pick.items[i], pick.items[j]] = [pick.items[j], pick.items[i]]; refreshPick(); return; }
+  if(a === "fb-type"){ fbSync(); fb.type = b.dataset.t; render(); return; }
+  if(a === "fb-copy"){ fbSync(); if(!fb.msg.trim()) return toast("Write your feedback first."); return fbCopy(); }
+  if(a === "fb-send"){ fbSync(); if(!fb.msg.trim()) return toast("Write your feedback first.");
+    if(FEEDBACK_URL){
+      if(fbSending) return; fbSending = true; render();
+      let ok = false;
+      try { const r = await fetch(FEEDBACK_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: fb.type, msg: fb.msg.trim(), name: fb.name.trim() }) }); ok = r.ok; } catch(e){}
+      fbSending = false;
+      if(ok){ fb.msg = ""; render(); return toast("Sent. Thanks for the feedback!"); }
+      render();
+      if(!navigator.onLine) return toast("You're offline. Try again when you're connected.");
+      if(!TELEGRAM_USER) return toast("Couldn't send. Try again in a bit.");
+      if(!(await ask("Couldn't send it right now. Open Telegram with your message filled in instead?", "Open Telegram"))) return;
+    }
+    if(!TELEGRAM_USER){ await fbCopy(); return toast("Telegram link isn't set up yet. Message copied instead."); }
+    window.open(`https://t.me/${TELEGRAM_USER}?text=${encodeURIComponent(fbText())}`, "_blank", "noopener");
+    fb.msg = ""; setTimeout(render, 500); return; }
+  if(a === "pk-clear"){ pick.items = []; refreshPick(); toast("All exercises deselected"); return; }
   if(a === "pk-rm"){ pick.items.splice(+b.dataset.i, 1); refreshPick(); return; }
   if(a === "pk-go") return pickGo();
   if(a === "preset") return applyPreset(b.dataset.p);
