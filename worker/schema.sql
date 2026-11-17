@@ -4,3 +4,6 @@ CREATE INDEX IF NOT EXISTS sessions_user ON sessions(user_id);
 CREATE TABLE IF NOT EXISTS docs (user_id INTEGER NOT NULL, path TEXT NOT NULL, data TEXT, t INTEGER NOT NULL, st INTEGER NOT NULL, del INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, path));
 CREATE INDEX IF NOT EXISTS docs_since ON docs(user_id, st);
 CREATE TABLE IF NOT EXISTS login_fails (username TEXT PRIMARY KEY, n INTEGER NOT NULL, until INTEGER NOT NULL);
+ALTER TABLE users ADD COLUMN google_sub TEXT;
+ALTER TABLE users ADD COLUMN email TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS users_google ON users(google_sub);

@@ -2,6 +2,8 @@
 //
 // Bindings (Worker > Settings > Bindings):
 //   DB          D1 database "onlypains"
+// Variables (Worker > Settings > Variables and Secrets, type "Text"):
+//   GOOGLE_CLIENT_ID  the OAuth client id from Google Cloud (see worker/README.md)
 // Secrets (Worker > Settings > Variables and Secrets, type "Secret"):
 //   BOT_TOKEN   the token BotFather gave you
 //   CHAT_ID     your own Telegram chat id
@@ -11,7 +13,8 @@
 //   POST /auth/signup     { username, password }  -> { token, username }
 //   POST /auth/login      { username, password }  -> { token, username }
 //   POST /auth/logout     Bearer token
-//   POST /auth/password   Bearer token, { old, new }
+//   POST /auth/password   Bearer token, { old, new }   (old can be empty if the account has no password yet)
+//   POST /auth/google     { credential } -> { token, username }; with a Bearer token it links Google to that account
 //   POST /sync            Bearer token, { since, changes: [{ path, data, t, del }] } -> { now, changes }
 //
 // Passwords are never stored: only a salted PBKDF2-SHA256 hash. Login tokens are stored as SHA-256 hashes.
@@ -61,6 +64,7 @@ export default {
       if (!env.DB) return reply(500, { ok: false, error: "database not connected" });
       if (path === "/auth/signup") return await signup(b, env, reply);
       if (path === "/auth/login") return await login(b, env, reply);
+      if (path === "/auth/google") return await google(b, req, env, reply);
       const who = await authed(req, env);
       if (!who) return reply(401, { ok: false, error: "signed out" });
       if (path === "/auth/logout") { await env.DB.prepare("DELETE FROM sessions WHERE token_hash = ?").bind(who.th).run(); return reply(200, { ok: true }); }
@@ -102,7 +106,7 @@ async function login(b, env, reply){
   const lock = await env.DB.prepare("SELECT n, until FROM login_fails WHERE username = ?").bind(u).first();
   if (lock && lock.until > now) return reply(429, { ok: false, error: "Too many tries. Wait 15 minutes and try again." });
   const row = await env.DB.prepare("SELECT id, pass_hash, salt FROM users WHERE username = ?").bind(u).first();
-  const ok = row && safeEq(await hashPw(pw, row.salt), row.pass_hash);
+  const ok = row && row.salt && safeEq(await hashPw(pw, row.salt), row.pass_hash);
   if (!ok) {
     const n = (lock ? lock.n : 0) + 1;
     await env.DB.prepare("INSERT INTO login_fails (username, n, until) VALUES (?, ?, ?) ON CONFLICT(username) DO UPDATE SET n = excluded.n, until = excluded.until")
@@ -114,7 +118,7 @@ async function login(b, env, reply){
 }
 async function changePw(b, who, env, reply){
   const row = await env.DB.prepare("SELECT pass_hash, salt FROM users WHERE id = ?").bind(who.id).first();
-  if (!row || !safeEq(await hashPw(String(b.old || ""), row.salt), row.pass_hash)) return reply(401, { ok: false, error: "Current password is wrong" });
+  if (!row || (row.salt && !safeEq(await hashPw(String(b.old || ""), row.salt), row.pass_hash))) return reply(401, { ok: false, error: "Current password is wrong" });
   const pw = String(b.new || "");
   if (pw.length < 8 || pw.length > 200) return reply(400, { ok: false, error: "Password needs at least 8 characters" });
   const salt = randHex(16);
@@ -154,7 +158,9 @@ async function sync(b, who, env, reply){
   const conv = r => ({ path: r.path, t: r.t, del: !!r.del, data: r.del ? null : JSON.parse(r.data) });
   const out = [...rows.map(conv), ...extra.map(conv)];
   const now = rows.length ? rows[rows.length - 1].st : since;
-  return reply(200, { ok: true, now, more: rows.length === MAX_PULL, changes: out, username: who.username });
+  const info = await env.DB.prepare("SELECT salt, google_sub, email FROM users WHERE id = ?").bind(who.id).first();
+  return reply(200, { ok: true, now, more: rows.length === MAX_PULL, changes: out, username: who.username,
+    hasPassword: !!(info && info.salt), google: info && info.google_sub ? (info.email || "linked") : null });
 }
 
 async function feedback(b, req, env, reply){
@@ -173,4 +179,52 @@ async function feedback(b, req, env, reply){
     body: JSON.stringify({ chat_id: env.CHAT_ID, text, disable_web_page_preview: true })
   });
   return tg.ok ? reply(200, { ok: true }) : reply(502, { ok: false, error: "telegram refused the message" });
+}
+
+// ---------- Sign in with Google ----------
+// The app gets a signed ID token from Google; we check Google's signature, that it was made for our
+// client id, and that it hasn't expired. Nothing else from Google is stored except the account id and email.
+let jwks = null, jwksAt = 0;
+async function googleKeys(){
+  if (jwks && Date.now() - jwksAt < 3600000) return jwks;
+  const r = await fetch("https://www.googleapis.com/oauth2/v3/certs");
+  if (!r.ok) throw new Error("google keys");
+  jwks = (await r.json()).keys; jwksAt = Date.now(); return jwks;
+}
+const b64u = s => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4)), c => c.charCodeAt(0));
+async function verifyGoogle(token, clientId){
+  const parts = String(token || "").split(".");
+  if (parts.length !== 3) return null;
+  let head, body;
+  try { head = JSON.parse(new TextDecoder().decode(b64u(parts[0]))); body = JSON.parse(new TextDecoder().decode(b64u(parts[1]))); } catch (e) { return null; }
+  if (head.alg !== "RS256") return null;
+  const jwk = (await googleKeys()).find(k => k.kid === head.kid);
+  if (!jwk) return null;
+  const key = await crypto.subtle.importKey("jwk", jwk, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]);
+  const ok = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key, b64u(parts[2]), enc.encode(parts[0] + "." + parts[1]));
+  const now = Date.now() / 1000;
+  if (!ok || body.aud !== clientId || !["accounts.google.com", "https://accounts.google.com"].includes(body.iss) || !(body.exp > now) || !body.sub) return null;
+  if (body.email && body.email_verified === false) return null;
+  return body;
+}
+async function google(b, req, env, reply){
+  if (!env.GOOGLE_CLIENT_ID) return reply(500, { ok: false, error: "Google sign-in isn't set up yet" });
+  const g = await verifyGoogle(b.credential, env.GOOGLE_CLIENT_ID);
+  if (!g) return reply(401, { ok: false, error: "Google sign-in didn't go through. Try again." });
+  const email = String(g.email || "").toLowerCase().slice(0, 200);
+  const owner = await env.DB.prepare("SELECT id, username FROM users WHERE google_sub = ?").bind(g.sub).first();
+  const who = await authed(req, env);
+  if (who) { // link Google to the signed-in account
+    if (owner && owner.id !== who.id) return reply(409, { ok: false, error: `That Google account is already used by ${owner.username}` });
+    await env.DB.prepare("UPDATE users SET google_sub = ?, email = ? WHERE id = ?").bind(g.sub, email, who.id).run();
+    return reply(200, { ok: true, linked: true, username: who.username, google: email });
+  }
+  if (owner) return reply(200, { ok: true, token: await newSession(owner.id, env), username: owner.username });
+  // new account: username from the email, made unique
+  let base = (email.split("@")[0] || "user").toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 16);
+  if (base.length < 3) base = (base + "user").slice(0, 16);
+  let u = base;
+  for (let i = 0; i < 50 && await env.DB.prepare("SELECT 1 FROM users WHERE username = ?").bind(u).first(); i++) u = base + Math.floor(10 + Math.random() * 990);
+  const r = await env.DB.prepare("INSERT INTO users (username, pass_hash, salt, created, google_sub, email) VALUES (?, '', '', ?, ?, ?)").bind(u, Date.now(), g.sub, email).run();
+  return reply(200, { ok: true, token: await newSession(r.meta.last_row_id, env), username: u, created: true });
 }

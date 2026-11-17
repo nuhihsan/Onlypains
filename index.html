@@ -1271,7 +1271,9 @@ async function syncNow(){
         const local = db.raw.get(LOCAL_PRE + c.path);
         return c.del ? local !== undefined : JSON.stringify(local) !== JSON.stringify(c.data); });
       if(apply.length) db.raw.apply(apply.map(c => ({ path: LOCAL_PRE + c.path, data: c.data, del: c.del })));
-      acct.since = Math.max(acct.since || 0, res.now || 0); acct.lastSync = Date.now(); saveAcct();
+      acct.since = Math.max(acct.since || 0, res.now || 0); acct.lastSync = Date.now();
+      const info = (acct.hasPassword !== !!res.hasPassword || acct.google !== (res.google || null)); acct.hasPassword = !!res.hasPassword; acct.google = res.google || null; saveAcct();
+      if(info && view === "setup" && !document.activeElement?.matches?.("input")) render();
       more = !!res.more || Object.keys(acct.dirty).length > 0 && changes.length === 500;
     }
     syncState = "ok";
@@ -1288,14 +1290,39 @@ async function signIn(mode){
   if(mode === "signup" && pw.length < 8) return toast("Use a password of at least 8 characters.");
   if(!db || !db.raw) return toast("Saving isn't available here.");
   try {
-    const r = await api(mode === "signup" ? "/auth/signup" : "/auth/login", { username: u, password: pw });
-    // upload what's on this phone, but let anything already in the account win (t = 1 is "older than everything")
-    const dirty = {}; for(const k of db.raw.keys()) if(k.startsWith(LOCAL_PRE)) dirty[k.slice(LOCAL_PRE.length)] = 1;
-    acct = { token: r.token, username: r.username, since: 0, dirty, lastSync: 0 }; saveAcct();
-    toast(mode === "signup" ? `Account created. Welcome, ${r.username}!` : `Signed in as ${r.username}`);
-    render(); await syncNow();
+    finishSignIn(await api(mode === "signup" ? "/auth/signup" : "/auth/login", { username: u, password: pw }), mode === "signup");
   } catch(e){ toast(e.error || "Couldn't sign in."); }
 }
+async function finishSignIn(r, isNew){
+  // upload what's on this phone, but let anything already in the account win (t = 1 is "older than everything")
+  const dirty = {}; for(const k of db.raw.keys()) if(k.startsWith(LOCAL_PRE)) dirty[k.slice(LOCAL_PRE.length)] = 1;
+  acct = { token: r.token, username: r.username, since: 0, dirty, lastSync: 0 }; saveAcct();
+  toast(isNew ? `Account created. Welcome, ${r.username}!` : `Signed in as ${r.username}`);
+  render(); await syncNow();
+}
+/* Sign in with Google: Google's own button gives us a signed token, the Worker checks it. */
+let gisLoading = null;
+function loadGis(){
+  if(window.google && google.accounts && google.accounts.id) return Promise.resolve();
+  return gisLoading || (gisLoading = new Promise((res, rej) => { const sc = document.createElement("script"); sc.src = "https://accounts.google.com/gsi/client"; sc.async = true; sc.onload = res; sc.onerror = () => { gisLoading = null; rej(); }; document.head.appendChild(sc); }));
+}
+async function mountGoogle(){
+  const el = document.getElementById("gbtn"); if(!el || !GOOGLE_CLIENT_ID) return;
+  try { await loadGis(); } catch(e){ el.innerHTML = `<p class="muted">Couldn't load Google sign-in. Check your connection.</p>`; return; }
+  if(!document.body.contains(el)) return;
+  google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: onGoogle, ux_mode: "popup", auto_select: false, cancel_on_tap_outside: true });
+  google.accounts.id.renderButton(el, { theme: "outline", size: "large", shape: "pill", text: acct ? "continue_with" : "signin_with", width: Math.min(360, Math.max(220, el.clientWidth || 300)) });
+}
+async function onGoogle(resp){
+  if(!resp || !resp.credential) return toast("Google sign-in was cancelled.");
+  if(!db || !db.raw) return toast("Saving isn't available here.");
+  try {
+    const r = await api("/auth/google", { credential: resp.credential });
+    if(r.linked){ acct.google = r.google || "linked"; saveAcct(); toast("Google connected. You can sign in with it now."); render(); return; }
+    finishSignIn(r, !!r.created);
+  } catch(e){ toast(e.error || "Google sign-in didn't work."); }
+}
+const iosHomeApp = () => !!(navigator.standalone);
 async function signOut(){
   if(!acct) return;
   if(Object.keys(acct.dirty).length) await syncNow();
@@ -1309,7 +1336,8 @@ async function signOut(){
 async function changePassword(){
   const o = document.getElementById("ac-old")?.value || "", n = document.getElementById("ac-new")?.value || "";
   if(n.length < 8) return toast("Use a new password of at least 8 characters.");
-  try { await api("/auth/password", { old: o, new: n }); toast("Password changed. Your other devices are signed out."); render(); }
+  try { await api("/auth/password", { old: o, new: n }); const first = acct.hasPassword === false; acct.hasPassword = true; saveAcct();
+    toast(first ? `Password set. You can now also sign in as ${acct.username} with it.` : "Password changed. Your other devices are signed out."); render(); }
   catch(e){ toast(e.error || "Couldn't change the password."); }
 }
 function ago(ms){ const m = Math.round((Date.now() - ms) / 60000); return m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m/60)} h ago` : `${Math.round(m/1440)} d ago`; }
@@ -1328,12 +1356,17 @@ function accountCardHtml(){
       <p class="muted" id="syncStatus" aria-live="polite">${esc(syncLine())}</p>
       <p class="muted">Your log is backed up to your account. Sign in with the same username on any phone or browser to pick up where you left off.</p>
       <div class="row" style="flex-wrap:wrap"><button class="btn" data-action="sync-now">Sync now</button><button class="btn danger" data-action="sign-out">Sign out</button></div>
-      <details><summary class="muted">Change password</summary><div class="fields" style="margin-top:8px">
-        <label class="field" for="ac-old">Current password<input id="ac-old" type="password" autocomplete="current-password"></label>
+      ${GOOGLE_CLIENT_ID ? (acct.google ? `<p class="muted">Google: ${esc(acct.google === "linked" ? "connected" : acct.google)}. You can sign in with Google on any device.</p>`
+        : `<div><p class="muted" style="margin-bottom:6px">Connect Google to also sign in with it:</p><div id="gbtn" style="min-height:44px"></div></div>`) : ""}
+      <details><summary class="muted">${acct.hasPassword === false ? "Add a password" : "Change password"}</summary><div class="fields" style="margin-top:8px">
+        ${acct.hasPassword === false ? `<p class="muted" style="grid-column:1/-1;margin:0">Lets you sign in as <b>${esc(acct.username)}</b> without Google, e.g. in the iPhone home screen app.</p>` : `<label class="field" for="ac-old">Current password<input id="ac-old" type="password" autocomplete="current-password"></label>`}
         <label class="field" for="ac-new">New password<input id="ac-new" type="password" autocomplete="new-password" minlength="8"></label></div>
-        <button class="btn small" data-action="change-pass" style="margin-top:8px">Change password</button></details></section>`;
+        <button class="btn small" data-action="change-pass" style="margin-top:8px">${acct.hasPassword === false ? "Set password" : "Change password"}</button></details></section>`;
   return `<section class="card"><h2>Account</h2>
       <p class="muted">Sign in to back up your log online. Then you can delete the app, change phones or use a laptop and keep everything.</p>
+      ${GOOGLE_CLIENT_ID ? `<div id="gbtn" style="min-height:44px;display:flex;justify-content:center"></div>
+        ${iosHomeApp() ? `<p class="muted">On the iPhone home screen app, Google sign-in sometimes won't open. If so, sign in with Google once in Safari, add a password under Account, then use that password here.</p>` : ""}
+        <p class="muted" style="text-align:center;margin:0">or use a username</p>` : ""}
       <div class="fields">
         <label class="field" for="ac-user">Username<input id="ac-user" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="20" placeholder="e.g. nuh"></label>
         <label class="field" for="ac-pass">Password<input id="ac-pass" type="password" autocomplete="current-password" maxlength="200"></label></div>
@@ -1487,6 +1520,8 @@ const TELEGRAM_USER = "nuh420";
 // Empty = no accounts, and feedback opens a Telegram chat instead.
 const WORKER_URL = "";
 const FEEDBACK_URL = WORKER_URL ? WORKER_URL + "/feedback" : "";
+// Google OAuth client id (public, not a secret). Empty = no "Sign in with Google" button.
+const GOOGLE_CLIENT_ID = "";
 let fbSending = false;
 const fb = { type: "Idea", msg: "", name: "" };
 function fbText(){
@@ -1635,6 +1670,7 @@ const APP_VERSION = "1.5";
 const PATCH_NOTES = [
   { v: "1.5", date: "2026-11-17", items: [
     "Accounts and cloud sync: sign in under Setup > Account and your log is backed up online",
+    "Sign in with Google, or with a username and password. Connect both to one account if you like",
     "Delete the app, change phones or use a laptop: sign in again and everything comes back",
     "Changes sync between your devices automatically, and the app still works offline",
     "Feedback now sends straight to the developer, with your username and app version" ] },
@@ -1980,6 +2016,7 @@ function render(){
   document.querySelectorAll("[data-view]").forEach(b => b.setAttribute("aria-current", b.dataset.view === navView ? "page" : "false"));
   document.getElementById("finishBar").hidden = !(view === "log" && draft);
   renderWeekChip();
+  if(view === "setup") mountGoogle();
 }
 
 /* ---------- events ---------- */
