@@ -179,12 +179,24 @@ async function feedback(b, req, env, reply){
   const who = await authed(req, env).catch(() => null);
   const ver = String(b.version || "").slice(0, 12);
   const text = `OnlyPains feedback: ${type}\n\n${msg}\n\nFrom: ${name}${who ? ` (account: ${who.username})` : " (not signed in)"}${ver ? `\nApp: v${ver}` : ""}`;
-  const tg = await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: env.CHAT_ID, text, disable_web_page_preview: true })
-  });
-  return tg.ok ? reply(200, { ok: true }) : reply(502, { ok: false, error: "telegram refused the message" });
+  // .trim() guards against a stray space or line break pasted in with the secrets
+  const token = String(env.BOT_TOKEN).trim().replace(/^bot/i, ""), chat = String(env.CHAT_ID).trim();
+  let tg;
+  try {
+    tg = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chat, text, disable_web_page_preview: true }),
+      signal: AbortSignal.timeout(10000)
+    });
+  } catch (e) {
+    return reply(504, { ok: false, error: "telegram didn't answer in time" });
+  }
+  if (tg.ok) return reply(200, { ok: true });
+  // pass Telegram's own reason back (it never contains the token), so setup problems are easy to spot
+  let why = ""; try { why = String((await tg.json()).description || "").slice(0, 200); } catch (e) {}
+  console.log("telegram refused:", tg.status, why);
+  return reply(502, { ok: false, error: "telegram refused the message", telegram: `${tg.status} ${why}`.trim() });
 }
 
 // ---------- Sign in with Google ----------

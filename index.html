@@ -1683,8 +1683,10 @@ async function handleWriteError(e){
 
 /* ---------- app version & patch notes ----------
    Every update: bump APP_VERSION and add an entry at the TOP of PATCH_NOTES (see CLAUDE.md). */
-const APP_VERSION = "1.5.1";
+const APP_VERSION = "1.5.2";
 const PATCH_NOTES = [
+  { v: "1.5.2", date: "2026-11-18", items: [
+    "Feedback no longer hangs if Telegram is slow: after 15 seconds it offers to open Telegram instead" ] },
   { v: "1.5.1", date: "2026-11-17", items: [
     "Sign in with Google now opens on the same page instead of a popup, so it works on iPhone and the home screen app",
     "Google button no longer shows a white box in dark mode",
@@ -2075,7 +2077,7 @@ document.addEventListener("click", async ev => {
     if(FEEDBACK_URL){
       if(fbSending) return; fbSending = true; render();
       let ok = false;
-      try { const r = await fetch(FEEDBACK_URL, { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, acct && acct.token ? { Authorization: "Bearer " + acct.token } : {}), body: JSON.stringify({ type: fb.type, msg: fb.msg.trim(), name: fb.name.trim() || (acct ? acct.username : ""), version: APP_VERSION }) }); ok = r.ok; } catch(e){}
+      try { const r = await fetch(FEEDBACK_URL, { method: "POST", signal: AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined, headers: Object.assign({ "Content-Type": "application/json" }, acct && acct.token ? { Authorization: "Bearer " + acct.token } : {}), body: JSON.stringify({ type: fb.type, msg: fb.msg.trim(), name: fb.name.trim() || (acct ? acct.username : ""), version: APP_VERSION }) }); ok = r.ok; } catch(e){}
       fbSending = false;
       if(ok){ fb.msg = ""; render(); return toast("Sent. Thanks for the feedback!"); }
       render();
