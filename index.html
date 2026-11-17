@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OnlyPains</title>
-<meta name="theme-color" content="#00aff0">
+<meta name="theme-color" content="#1d55c4">
 <meta name="description" content="Log gym splits, runs, food and body measurements.">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
@@ -211,7 +211,7 @@ details summary{cursor:pointer;min-height:32px;display:flex;align-items:center}
 <body>
 <div class="app">
   <header>
-    <h1>OnlyPains</h1>
+    <h1><svg viewBox="0 0 512 512" width="30" height="30" aria-hidden="true" style="vertical-align:-5px;margin-right:8px;border-radius:7px"><rect width="512" height="512" rx="112" fill="#1d55c4"/><g transform="translate(0 6)"><circle cx="176" cy="250" r="118" fill="#fff"/><circle cx="176" cy="250" r="88" fill="#1d55c4"/><circle cx="176" cy="250" r="64" fill="#fff"/><circle cx="176" cy="250" r="22" fill="#1d55c4"/><g fill="#1d55c4"><ellipse cx="176" cy="208" rx="9" ry="13"/><ellipse cx="176" cy="292" rx="9" ry="13"/><ellipse cx="134" cy="250" rx="13" ry="9"/><ellipse cx="218" cy="250" rx="13" ry="9"/></g><path fill="#fff" d="M308 132h86a86 86 0 0 1 0 172h-30v64h-56zm56 52v68h26a34 34 0 0 0 0-68z"/></g></svg>OnlyPains</h1>
     <div class="row" style="gap:6px"><span id="weekChip" class="chip info">This week: 0</span>
       <button class="icon-btn" id="setupBtn" data-view="setup" aria-label="Setup: exercises and targets"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button></div>
   </header>
@@ -1520,8 +1520,10 @@ async function handleWriteError(e){
 
 /* ---------- app version & patch notes ----------
    Every update: bump APP_VERSION and add an entry at the TOP of PATCH_NOTES (see CLAUDE.md). */
-const APP_VERSION = "1.4";
+const APP_VERSION = "1.4.1";
 const PATCH_NOTES = [
+  { v: "1.4.1", date: "2026-11-17", items: [
+    "New OP logo: the O is a weight plate. Shows in the header and on your home screen icon" ] },
   { v: "1.4", date: "2026-11-17", items: [
     "Progress: tap the chart to see any session, switch between Top set, Est. 1RM and Volume, and pick 1M, 3M, 6M or All",
     "Progress: dashed trend line and % change over the range you pick",
