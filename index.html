@@ -229,7 +229,7 @@ details summary{cursor:pointer;min-height:32px;display:flex;align-items:center}
 
 <script>
 /* ---------- exercise library, programs & the exercise picker ---------- */
-const GROUPS = [["chest","Chest"],["back","Back"],["shoulders","Shoulders"],["biceps","Biceps"],["triceps","Triceps"],["legs","Legs"],["glutes","Glutes"],["core","Core"]];
+const GROUPS = [["chest","Chest"],["back","Back"],["shoulders","Shoulders"],["biceps","Biceps"],["triceps","Triceps"],["forearms","Forearms"],["legs","Legs"],["glutes","Glutes"],["core","Abs & Core"]];
 const GROUP_NAME = Object.fromEntries([...GROUPS, ["other","Other"], ["all","All"]]);
 const EX_LIB = `chest|Bench Press|barbell
 chest|Incline Bench Press|barbell
@@ -285,6 +285,15 @@ triceps|Close-Grip Bench Press|barbell
 triceps|Dips|bodyweight
 triceps|Bench Dips|bodyweight
 triceps|Tricep Kickback|dumbbell
+forearms|Wrist Curl|dumbbell
+forearms|Reverse Wrist Curl|dumbbell
+forearms|Behind-the-Back Wrist Curl|barbell
+forearms|Cable Wrist Curl|cable
+forearms|Reverse Curl|barbell
+forearms|Wrist Roller|bodyweight
+forearms|Farmer's Carry|dumbbell
+forearms|Dead Hang|bodyweight
+forearms|Plate Pinch|bodyweight
 legs|Squat|barbell
 legs|Front Squat|barbell
 legs|Leg Press|machine
@@ -312,11 +321,24 @@ core|Cable Crunch|cable
 core|Hanging Leg Raise|bodyweight
 core|Russian Twist|bodyweight
 core|Ab Wheel Rollout|bodyweight
-core|Mountain Climbers|bodyweight`.split("\n").map(l => { const [group, name, eq] = l.split("|"); return { group, name, eq }; });
+core|Mountain Climbers|bodyweight
+core|Ab Crunch Machine|machine
+core|Decline Crunch|bodyweight
+core|Reverse Crunch|bodyweight
+core|Bicycle Crunch|bodyweight
+core|Weighted Sit-Up|bodyweight
+core|Lying Leg Raise|bodyweight
+core|Captain's Chair Leg Raise|machine
+core|Toes to Bar|bodyweight
+core|V-Up|bodyweight
+core|Hollow Hold|bodyweight
+core|Dead Bug|bodyweight
+core|Cable Woodchopper|cable
+core|Pallof Press|cable`.split("\n").map(l => { const [group, name, eq] = l.split("|"); return { group, name, eq }; });
 const PRESETS = {
   ul: { label: "Upper / Lower", sub: "2 days that alternate", splits: [
-    ["upper", "Upper", ["Bench Press", "Lat Pulldown", "Overhead Press", "Seated Cable Row", "Bicep Curl", "Tricep Pushdown"]],
-    ["lower", "Lower", ["Squat", "Romanian Deadlift", "Leg Press", "Leg Curl", "Hip Adduction Machine", "Calf Raise"]]] },
+    ["upper", "Upper", ["Bench Press", "Lat Pulldown", "Overhead Press", "Seated Cable Row", "Bicep Curl", "Tricep Pushdown", "Cable Crunch"]],
+    ["lower", "Lower", ["Squat", "Romanian Deadlift", "Leg Press", "Leg Curl", "Hip Adduction Machine", "Calf Raise", "Hanging Leg Raise"]]] },
   full: { label: "Full body", sub: "A and B days, whole body each time", splits: [
     ["fullA", "Full body A", ["Squat", "Bench Press", "Barbell Row", "Overhead Press", "Romanian Deadlift", "Plank"]],
     ["fullB", "Full body B", ["Deadlift", "Incline Dumbbell Press", "Lat Pulldown", "Lunges", "Lateral Raise", "Hanging Leg Raise"]]] },
@@ -324,11 +346,33 @@ const PRESETS = {
     ["push", "Push", ["Bench Press", "Overhead Press", "Incline Dumbbell Press", "Lateral Raise", "Tricep Pushdown", "Overhead Tricep Extension"]],
     ["pull", "Pull", ["Lat Pulldown", "Barbell Row", "Seated Cable Row", "Face Pull", "Bicep Curl", "Hammer Curl"]],
     ["legs", "Legs", ["Squat", "Romanian Deadlift", "Leg Press", "Leg Curl", "Leg Extension", "Calf Raise"]]] },
-  custom: { label: "Custom", sub: "Your own split days" }
+  custom: { label: "Custom", sub: "Your own split days" },
+  /* Level programs. Each exercise is [name, sets, reps]. Built on the evidence-based basics popularised by
+     Jeff Nippard, Mike Israetel and Brad Schoenfeld's research: each muscle about 2x a week, roughly
+     6-10 hard sets per muscle a week for beginners, 10-15 for intermediates, 15-20 for advanced,
+     compounds in lower reps, isolations in higher reps, all taken close to failure (1-3 reps in reserve). */
+  beg: { level: "Beginner", label: "Full body 3x", sub: "0-1 year lifting · 3 days a week", days: [2, 3], splits: [
+    ["begA", "Full body A", [["Squat", 3, 8], ["Dumbbell Bench Press", 3, 10], ["Lat Pulldown", 3, 10], ["Romanian Deadlift", 3, 10], ["Lateral Raise", 2, 12], ["Tricep Pushdown", 2, 12]]],
+    ["begB", "Full body B", [["Leg Press", 3, 10], ["Seated Cable Row", 3, 10], ["Dumbbell Shoulder Press", 3, 10], ["Leg Curl", 2, 12], ["Bicep Curl", 2, 12], ["Wrist Curl", 2, 15]]]] },
+  int: { level: "Intermediate", label: "Upper / Lower 4x", sub: "1-3 years · 4 days a week", days: [3, 4], splits: [
+    ["intUA", "Upper A", [["Bench Press", 3, 6], ["Barbell Row", 3, 8], ["Overhead Press", 3, 8], ["Lat Pulldown", 3, 10], ["Lateral Raise", 3, 12], ["EZ-Bar Curl", 3, 10], ["Overhead Tricep Extension", 3, 10]]],
+    ["intLA", "Lower A", [["Squat", 3, 6], ["Romanian Deadlift", 3, 8], ["Leg Extension", 3, 12], ["Leg Curl", 3, 12], ["Calf Raise", 3, 12], ["Hanging Leg Raise", 3, 12]]],
+    ["intUB", "Upper B", [["Incline Dumbbell Press", 3, 10], ["Pull-Up", 3, 8], ["Seated Cable Row", 3, 10], ["Cable Lateral Raise", 3, 15], ["Rope Pushdown", 3, 12], ["Hammer Curl", 3, 12], ["Wrist Curl", 2, 15]]],
+    ["intLB", "Lower B", [["Hack Squat", 3, 10], ["Hip Thrust", 3, 10], ["Bulgarian Split Squat", 3, 10], ["Leg Curl", 3, 12], ["Hip Adduction Machine", 3, 12], ["Seated Calf Raise", 3, 15]]]] },
+  adv: { level: "Advanced", label: "Push / Pull / Legs 6x", sub: "3+ years · 5-6 days a week", days: [5, 6], splits: [
+    ["advPA", "Push A", [["Bench Press", 4, 6], ["Overhead Press", 3, 8], ["Incline Dumbbell Press", 3, 10], ["Cable Lateral Raise", 4, 15], ["Overhead Tricep Extension", 3, 10], ["Rope Pushdown", 3, 12]]],
+    ["advPLA", "Pull A", [["Deadlift", 3, 5], ["Pull-Up", 4, 8], ["Barbell Row", 3, 8], ["Face Pull", 3, 15], ["Incline Dumbbell Curl", 3, 10], ["Wrist Curl", 3, 15]]],
+    ["advLA", "Legs A", [["Squat", 4, 6], ["Romanian Deadlift", 3, 8], ["Leg Press", 3, 12], ["Leg Curl", 3, 12], ["Calf Raise", 4, 12], ["Hanging Leg Raise", 3, 12]]],
+    ["advPB", "Push B", [["Incline Bench Press", 4, 8], ["Dumbbell Shoulder Press", 3, 10], ["Cable Crossover", 3, 12], ["Lateral Raise", 4, 15], ["Skull Crusher", 3, 10], ["Dips", 3, 10]]],
+    ["advPLB", "Pull B", [["Lat Pulldown", 4, 10], ["Seated Cable Row", 3, 10], ["Rear Delt Fly", 3, 15], ["Preacher Curl", 3, 12], ["Hammer Curl", 3, 12], ["Reverse Curl", 3, 12]]],
+    ["advLB", "Legs B", [["Hack Squat", 4, 10], ["Hip Thrust", 3, 10], ["Bulgarian Split Squat", 3, 10], ["Leg Extension", 3, 15], ["Seated Calf Raise", 4, 15], ["Cable Crunch", 3, 12]]]] }
 };
 function presetSplits(p, sets, reps){
   const splits = {}, order = [];
-  for(const [k, name, ex] of PRESETS[p].splits){ splits[k] = { name, exercises: ex.map(n => ({ name: n, sets, reps })) }; order.push(k); }
+  for(const [k, name, ex] of PRESETS[p].splits){
+    splits[k] = { name, exercises: ex.map(n => Array.isArray(n) ? { name: n[0], sets: n[1], reps: n[2] } : { name: n, sets, reps }) };
+    order.push(k);
+  }
   return { splits, order };
 }
 function clampInt(v, lo, hi, d){ v = Math.round(num(v)); return v >= lo && v <= hi ? v : d; }
@@ -349,7 +393,7 @@ function allExercises(){
 }
 /* ---------- muscle map: front and back view, main muscles bright, helpers faint ---------- */
 const MUSCLE_NAME = { chest: "Chest", chest_upper: "Upper chest", delt_front: "Front delts", delt_side: "Side delts", delt_rear: "Rear delts", traps: "Traps", lats: "Lats", lower_back: "Lower back", biceps: "Biceps", triceps: "Triceps", forearms: "Forearms", abs: "Abs", obliques: "Obliques", quads: "Quads", adductors: "Inner thighs", hamstrings: "Hamstrings", glutes: "Glutes", calves: "Calves" };
-const GROUP_MUSCLES = { chest: [["chest","chest_upper"],[]], back: [["lats","traps","lower_back"],[]], shoulders: [["delt_front","delt_side","delt_rear"],[]], biceps: [["biceps"],["forearms"]], triceps: [["triceps"],[]], legs: [["quads","hamstrings","calves"],["glutes","adductors"]], glutes: [["glutes"],["hamstrings"]], core: [["abs","obliques"],[]], other: [[],[]] };
+const GROUP_MUSCLES = { chest: [["chest","chest_upper"],[]], back: [["lats","traps","lower_back"],[]], shoulders: [["delt_front","delt_side","delt_rear"],[]], biceps: [["biceps"],["forearms"]], triceps: [["triceps"],[]], forearms: [["forearms"],[]], legs: [["quads","hamstrings","calves"],["glutes","adductors"]], glutes: [["glutes"],["hamstrings"]], core: [["abs","obliques"],[]], other: [[],[]] };
 const EX_MUSCLES = {
   "Bench Press": "chest|delt_front,triceps", "Incline Bench Press": "chest_upper|delt_front,triceps", "Decline Bench Press": "chest|triceps",
   "Dumbbell Bench Press": "chest|delt_front,triceps", "Incline Dumbbell Press": "chest_upper,delt_front|triceps", "Dumbbell Flyes": "chest,chest_upper|delt_front",
@@ -366,12 +410,17 @@ const EX_MUSCLES = {
   "Incline Dumbbell Curl": "biceps|", "Cable Curl": "biceps|forearms", "Concentration Curl": "biceps|",
   "Tricep Pushdown": "triceps|", "Rope Pushdown": "triceps|", "Overhead Tricep Extension": "triceps|", "Skull Crusher": "triceps|", "Close-Grip Bench Press": "triceps,chest|delt_front",
   "Dips": "triceps,chest|delt_front", "Bench Dips": "triceps|delt_front", "Tricep Kickback": "triceps|",
+  "Wrist Curl": "forearms|", "Reverse Wrist Curl": "forearms|", "Behind-the-Back Wrist Curl": "forearms|", "Cable Wrist Curl": "forearms|",
+  "Reverse Curl": "forearms|biceps", "Wrist Roller": "forearms|delt_front", "Farmer's Carry": "forearms,traps|abs,obliques", "Dead Hang": "forearms|lats", "Plate Pinch": "forearms|",
   "Squat": "quads,glutes|hamstrings,lower_back", "Front Squat": "quads|glutes,abs", "Leg Press": "quads,glutes|hamstrings", "Hack Squat": "quads|glutes", "Goblet Squat": "quads,glutes|abs",
   "Bulgarian Split Squat": "quads,glutes|hamstrings", "Lunges": "quads,glutes|hamstrings", "Step-Up": "quads,glutes|hamstrings", "Leg Extension": "quads|", "Leg Curl": "hamstrings|calves",
   "Romanian Deadlift": "hamstrings,glutes|lower_back", "Stiff-Leg Deadlift": "hamstrings|glutes,lower_back", "Calf Raise": "calves|", "Seated Calf Raise": "calves|",
   "Hip Thrust": "glutes|hamstrings", "Glute Bridge": "glutes|hamstrings", "Sumo Deadlift": "glutes,quads,hamstrings|lower_back,traps", "Cable Kickback": "glutes|hamstrings", "Hip Abduction Machine": "glutes|", "Hip Adduction Machine": "adductors|glutes",
   "Plank": "abs|obliques,delt_front", "Side Plank": "obliques|abs", "Crunch": "abs|", "Cable Crunch": "abs|obliques", "Hanging Leg Raise": "abs|obliques,forearms",
-  "Russian Twist": "obliques|abs", "Ab Wheel Rollout": "abs|lats,delt_front", "Mountain Climbers": "abs|quads,delt_front"
+  "Russian Twist": "obliques|abs", "Ab Wheel Rollout": "abs|lats,delt_front", "Mountain Climbers": "abs|quads,delt_front",
+  "Ab Crunch Machine": "abs|obliques", "Decline Crunch": "abs|obliques", "Reverse Crunch": "abs|obliques", "Bicycle Crunch": "abs,obliques|", "Weighted Sit-Up": "abs|obliques",
+  "Lying Leg Raise": "abs|obliques", "Captain's Chair Leg Raise": "abs|obliques", "Toes to Bar": "abs|obliques,lats,forearms", "V-Up": "abs|obliques", "Hollow Hold": "abs|obliques",
+  "Dead Bug": "abs|obliques", "Cable Woodchopper": "obliques|abs,delt_front", "Pallof Press": "obliques|abs"
 };
 function exMuscles(name){
   const v = EX_MUSCLES[Object.keys(EX_MUSCLES).find(k => k.toLowerCase() === String(name).toLowerCase())];
@@ -506,9 +555,11 @@ async function applyPreset(p){
   if(p === cfg.program) return;
   const next = clone(cfg);
   if(p === "custom"){ next.program = "custom"; await saveCfg(next, "Custom program: add or edit your splits below"); render(); return; }
-  if(!(await ask(`Switch to ${PRESETS[p].label}? Your split days are replaced with its days. Past workouts are kept.`, "Switch"))) return;
+  const pr = PRESETS[p], title = pr.level ? `${pr.level}: ${pr.label}` : pr.label;
+  if(!(await ask(`Switch to ${title}? Your split days are replaced with its days${pr.days ? ` and your weekly target becomes ${pr.days[0]}-${pr.days[1]} sessions` : ""}. Past workouts are kept.`, "Switch"))) return;
   Object.assign(next, presetSplits(p, cfg.setTarget, cfg.repTarget), { program: p });
-  if(await saveCfg(next, `Switched to ${PRESETS[p].label}`)){ setupDraft = null; render(); }
+  if(pr.days){ next.weekMin = pr.days[0]; next.weekMax = pr.days[1]; }
+  if(await saveCfg(next, `Switched to ${title}`)){ setupDraft = null; render(); }
 }
 
 const DEFAULT_CFG = {
@@ -1384,6 +1435,12 @@ function normCfg(d){
     ex.splice(ci >= 0 ? ci : ex.length, 0, { name: "Hip Adduction Machine", sets: c.setTarget, reps: c.repTarget });
   }
   c.migAdduction = true;
+  // one-time: finish Upper and Lower with an abs exercise if they have none (only once, so removing it later sticks)
+  if(!d.migAbs) for(const [k, ex] of [["upper", "Cable Crunch"], ["lower", "Hanging Leg Raise"]]){
+    const sp = c.splits[k];
+    if(sp && !sp.exercises.some(x => exGroup(x.name) === "core")) sp.exercises.push({ name: ex, sets: c.setTarget, reps: c.repTarget });
+  }
+  c.migAbs = true;
   c.program = PRESETS[d.program] ? d.program : (d.splits && !d.program ? "ul" : c.program);
   c.customEx = Array.isArray(d.customEx) ? d.customEx.filter(x => x && typeof x.name === "string" && x.name.trim()).map(x => ({ name: x.name.trim().slice(0, 40), group: GROUP_NAME[x.group] && x.group !== "all" ? x.group : "other" })).slice(0, 300) : [];
   if(d.profile && typeof d.profile === "object"){
@@ -1461,6 +1518,54 @@ async function handleWriteError(e){
   else { toast("Couldn't save. Try again."); }
 }
 
+/* ---------- app version & patch notes ----------
+   Every update: bump APP_VERSION and add an entry at the TOP of PATCH_NOTES (see CLAUDE.md). */
+const APP_VERSION = "1.4";
+const PATCH_NOTES = [
+  { v: "1.4", date: "2026-11-17", items: [
+    "Progress: tap the chart to see any session, switch between Top set, Est. 1RM and Volume, and pick 1M, 3M, 6M or All",
+    "Progress: dashed trend line and % change over the range you pick",
+    "Progress: hard sets per muscle for this week or last week, with a target band for your level",
+    "Progress: sets per week and volume per week charts for the last 8 weeks",
+    "New Forearms group: wrist curls, reverse curls, farmer's carry, dead hang and more",
+    "13 more abs exercises, and the Upper and Lower days now end with an abs exercise",
+    "Beginner, Intermediate and Advanced programs in Setup, with a short guide to the science behind them",
+    "App version and these patch notes" ] },
+  { v: "1.3", date: "2026-11-16", items: [
+    "Tape measurements (waist, chest, arms and more) on the Body tab",
+    "Deselect all in the exercise picker",
+    "Feedback tab sends straight to Telegram",
+    "Hip Adduction added to the Lower day",
+    "Sky blue logo" ] },
+  { v: "1.2", date: "2026-11-15", items: [
+    "Muscle map for every exercise",
+    "Fixed layout breaking on long names and two picker bugs" ] },
+  { v: "1.1", date: "2026-11-15", items: [
+    "Programs: Upper / Lower, Full body, Push / Pull / Legs or your own custom splits",
+    "Exercise picker with search and muscle groups",
+    "Fixed form sizing on iPhone" ] },
+  { v: "1.0", date: "2026-11-13", items: [
+    "First release: gym log, runs with Strava and Garmin import, food tracker, progress charts and body measurements" ] }
+];
+const SEEN_KEY = "onlypains-seen-version";
+function seenVersion(){ try { return localStorage.getItem(SEEN_KEY); } catch(e){ return APP_VERSION; } }
+function markSeen(){ try { localStorage.setItem(SEEN_KEY, APP_VERSION); } catch(e){} }
+function whatsNewHtml(){
+  const seen = seenVersion();
+  if(seen === APP_VERSION) return "";
+  if(!seen && !sessions.length){ markSeen(); return ""; } // brand new users don't need patch notes
+  const n = PATCH_NOTES[0];
+  return `<section class="card" style="border:2px solid var(--accent)"><div class="row between"><h2>What's new in v${n.v}</h2><span class="chip info">${esc(fmtDate(n.date))}</span></div>
+    <ul style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px;font-size:14px">${n.items.map(i => `<li>${esc(i)}</li>`).join("")}</ul>
+    <div class="row" style="justify-content:flex-end;gap:8px"><button class="btn small" data-action="notes-all">All patch notes</button><button class="btn small primary" data-action="notes-ok">Got it</button></div></section>`;
+}
+function patchNotesHtml(){
+  return `<section class="card" id="patchNotes"><div class="row between"><h2>Patch notes</h2><span class="chip info">v${APP_VERSION}</span></div>
+    ${PATCH_NOTES.map((n, i) => `<details ${i === 0 ? "open" : ""}><summary><b>v${n.v}</b> <span class="muted">· ${esc(fmtDateLong(n.date))}</span></summary>
+      <ul style="margin:6px 0 4px;padding-left:18px;display:flex;flex-direction:column;gap:4px;font-size:14px">${n.items.map(x => `<li>${esc(x)}</li>`).join("")}</ul></details>`).join("")}
+  </section>`;
+}
+
 /* ---------- views ---------- */
 function renderWeekChip(){
   const n = weekCount(), chip = document.getElementById("weekChip");
@@ -1478,6 +1583,7 @@ function renderLog(){
         <strong>${esc(sp.name)}</strong><span>${sp.exercises.length} exercises · ~${Math.round(sets * 2.2)} min</span></button>`;
     };
     return `${bannerHtml()}
+      ${whatsNewHtml()}
       ${renderTracker()}
       <section class="card"><h2>Start a workout</h2>
         <div class="split-pick">${cfg.order.map(btn).join("")}
@@ -1550,7 +1656,8 @@ function historyFor(name){
     let top = e.sets[0];
     for(const x of e.sets) if(num(x.kg) > num(top.kg) || (num(x.kg) === num(top.kg) && num(x.reps) > num(top.reps))) top = x;
     const best = Math.max(...e.sets.map(x => e1rm(num(x.kg), num(x.reps))));
-    out.push({ date: s.date, kg: num(top.kg), reps: num(top.reps), e1rm: best, sets: e.sets });
+    const vol = e.sets.reduce((a, x) => a + num(x.kg) * num(x.reps), 0);
+    out.push({ date: s.date, kg: num(top.kg), reps: num(top.reps), e1rm: best, vol, sets: e.sets });
   }
   return out.reverse(); // oldest first
 }
@@ -1576,32 +1683,129 @@ function chartSvg(pts, emptyMsg, what, fmt){
     <text x="${W-pr}" y="${H-8}" font-size="11" fill="var(--muted)" text-anchor="end">${esc(fmtDate(lastP.date))}</text>
   </svg>`;
 }
+/* ---------- progress charts: tappable exercise trend, weekly sets per muscle, training volume ---------- */
+let progMetric = "top", progRange = "3m", progPt = null, volWeek = 0;
+const PROG_METRICS = { top: ["Top set", p => p.kg, "kg"], e1rm: ["Est. 1RM", p => p.e1rm, "kg"], vol: ["Volume", p => p.vol, "kg"] };
+const PROG_RANGES = [["1m", "1M", 31], ["3m", "3M", 92], ["6m", "6M", 183], ["all", "All", 0]];
+function segHtml(items, cur, action, cols){
+  return `<div class="seg" role="group" style="grid-template-columns:repeat(${cols || items.length},1fr)">${items.map(([k, l]) => `<button class="${k === cur ? "on" : ""}" data-action="${action}" data-v="${k}" aria-pressed="${k === cur}">${l}</button>`).join("")}</div>`;
+}
+function fmtBig(v){ v = Math.round(v); return v >= 10000 ? (Math.round(v/100)/10) + "k" : v.toLocaleString(); }
+function trendSvg(pts, val, sel){
+  const W = 340, H = 190, pl = 44, pr = 14, pt = 16, pb = 26, n = pts.length;
+  const vs = pts.map(val), dMin = Math.min(...vs), dMax = Math.max(...vs);
+  let lo = dMin, hi = dMax; if(lo === hi){ lo -= 5; hi += 5; } const pad = (hi - lo) * 0.14; lo = Math.max(0, lo - pad); hi += pad;
+  const x = i => pl + (W - pl - pr) * (n === 1 ? .5 : i / (n - 1)), y = v => pt + (H - pt - pb) * (1 - (v - lo) / (hi - lo));
+  const line = vs.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join("");
+  // simple least-squares trend line, so the direction is clear even when sessions bounce around
+  let tr = "";
+  if(n >= 3){ const mx = (n - 1) / 2, my = vs.reduce((a, v) => a + v, 0) / n; let sxy = 0, sxx = 0; vs.forEach((v, i) => { sxy += (i - mx) * (v - my); sxx += (i - mx) ** 2; });
+    const b = sxy / sxx, a = my - b * mx; tr = `<line x1="${x(0)}" y1="${y(a).toFixed(1)}" x2="${x(n-1)}" y2="${y(a + b*(n-1)).toFixed(1)}" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="4 4" opacity=".7"/>`; }
+  const mid = (dMin + dMax) / 2, ticks = dMin === dMax ? [dMax] : [dMin, mid, dMax];
+  const grid = ticks.map(v => `<line x1="${pl}" x2="${W-pr}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}" stroke="var(--line)" stroke-dasharray="3 3"/><text x="${pl-6}" y="${(y(v)+4).toFixed(1)}" text-anchor="end" font-size="11" fill="var(--muted)">${fmtBig(v)}</text>`).join("");
+  const s = sel != null && sel < n ? sel : n - 1;
+  const hw = (W - pl - pr) / Math.max(1, n - 1) / 2;
+  const hits = pts.map((p, i) => `<rect x="${(x(i) - hw).toFixed(1)}" y="0" width="${(hw*2).toFixed(1)}" height="${H}" fill="transparent" data-action="prog-pt" data-i="${i}" style="cursor:pointer"/>`).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Trend over ${n} sessions, from ${fmtBig(vs[0])} to ${fmtBig(vs[n-1])} kg">
+    ${grid}${n > 1 ? `<path d="${line}L${x(n-1).toFixed(1)},${H-pb}L${pl},${H-pb}Z" fill="var(--accent)" opacity=".12"/>` : ""}${tr}
+    <line x1="${x(s).toFixed(1)}" x2="${x(s).toFixed(1)}" y1="${pt}" y2="${H-pb}" stroke="var(--accent)" stroke-width="1" opacity=".45"/>
+    ${n > 1 ? `<path d="${line}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>` : ""}
+    ${vs.map((v, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="${i === s ? 6 : 3}" fill="${i === s ? "var(--surface)" : "var(--accent)"}" stroke="var(--accent)" stroke-width="${i === s ? 3 : 0}"/>`).join("")}
+    <text x="${pl}" y="${H-8}" font-size="11" fill="var(--muted)">${esc(fmtDate(pts[0].date))}</text>
+    <text x="${W-pr}" y="${H-8}" font-size="11" fill="var(--muted)" text-anchor="end">${esc(fmtDate(pts[n-1].date))}</text>
+    ${hits}</svg>`;
+}
+/* Weekly sets per muscle: a set counts 1 for its main muscles and 0.5 for helpers (the usual fractional-set method). */
+const VOL_GROUPS = [["Chest", ["chest","chest_upper"]], ["Back", ["lats","traps","lower_back"]], ["Shoulders", ["delt_front","delt_side","delt_rear"]], ["Biceps", ["biceps"]], ["Triceps", ["triceps"]], ["Forearms", ["forearms"]], ["Quads", ["quads","adductors"]], ["Hamstrings", ["hamstrings"]], ["Glutes", ["glutes"]], ["Calves", ["calves"]], ["Abs & core", ["abs","obliques"]]];
+const MUSCLE_TO_VG = Object.fromEntries(VOL_GROUPS.flatMap(([g, ms]) => ms.map(m => [m, g])));
+function volBand(){ return { beg: [6, 10, "Beginner"], int: [10, 15, "Intermediate"], adv: [15, 20, "Advanced"] }[cfg.program] || [10, 20, "Typical"]; }
+function setsPerMuscle(from, to){
+  const out = Object.fromEntries(VOL_GROUPS.map(([g]) => [g, 0]));
+  for(const s of sessions){ if(!s.date || s.date < from || s.date > to) continue;
+    for(const e of (s.entries || [])){ const [p, sec] = exMuscles(e.name), pg = new Set(p.map(m => MUSCLE_TO_VG[m]).filter(Boolean)), sg = new Set(sec.map(m => MUSCLE_TO_VG[m]).filter(g => g && !pg.has(g)));
+      const n = (e.sets || []).length; for(const g of pg) out[g] += n; for(const g of sg) out[g] += n * 0.5; } }
+  return out;
+}
+function muscleBarsHtml(counts, band){
+  const max = Math.max(band[1] + 4, ...Object.values(counts)), W = 340, rowH = 26, lw = 86, rw = W - lw - 34, H = VOL_GROUPS.length * rowH + 20;
+  const xv = v => lw + rw * v / max;
+  const rows = VOL_GROUPS.map(([g], i) => { const v = counts[g], y = 16 + i * rowH, col = v >= band[0] && v <= band[1] ? "var(--good)" : v > band[1] ? "var(--accent)" : v > 0 ? "var(--warn)" : "var(--fig)";
+    return `<text x="${lw - 8}" y="${y + 13}" text-anchor="end" font-size="12" fill="var(--ink)">${g}</text>
+      <rect x="${lw}" y="${y + 3}" width="${Math.max(v > 0 ? 3 : 0, xv(v) - lw).toFixed(1)}" height="14" rx="4" fill="${col}"/>
+      <text x="${(xv(v) + 5).toFixed(1)}" y="${y + 14}" font-size="11" fill="var(--muted)">${kg(v)}</text>`; }).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Hard sets per muscle, target ${band[0]} to ${band[1]}">
+    <rect x="${xv(band[0]).toFixed(1)}" y="10" width="${(xv(band[1]) - xv(band[0])).toFixed(1)}" height="${H - 14}" fill="var(--good)" opacity=".1" rx="4"/>
+    <text x="${((xv(band[0]) + xv(band[1])) / 2).toFixed(1)}" y="8" text-anchor="middle" font-size="10" fill="var(--good)">target ${band[0]}-${band[1]}</text>${rows}</svg>`;
+}
+function weeklyBarsSvg(bars, unit){
+  const W = 340, H = 140, pl = 8, pr = 8, pt = 18, pb = 22, n = bars.length, max = Math.max(1, ...bars.map(b => b.v)), bw = (W - pl - pr) / n;
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(unit)} per week for the last ${n} weeks">
+    <line x1="${pl}" x2="${W-pr}" y1="${H-pb}" y2="${H-pb}" stroke="var(--line)"/>
+    ${bars.map((b, i) => { const h = (H - pt - pb) * b.v / max, x = pl + i*bw + bw*0.18, y = H - pb - h;
+      return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${(bw*0.64).toFixed(1)}" height="${Math.max(0, h).toFixed(1)}" rx="3" fill="var(--accent)" opacity="${i === n-1 ? 1 : .55}"/>
+      ${b.v > 0 ? `<text x="${(x + bw*0.32).toFixed(1)}" y="${(y - 5).toFixed(1)}" text-anchor="middle" font-size="10" fill="var(--ink)">${fmtBig(b.v)}</text>` : ""}
+      <text x="${(x + bw*0.32).toFixed(1)}" y="${H - 7}" text-anchor="middle" font-size="10" fill="var(--muted)">${i === n-1 ? "now" : esc(fmtDate(b.w).split(" ")[0])}</text>`; }).join("")}
+  </svg>`;
+}
 function renderProgress(){
   const names = allExerciseNames();
   if(!names.length) return `${bannerHtml()}${renderMilestones()}<section class="card empty"><h3>Nothing to chart yet</h3><p class="muted">Log a workout and your progress per exercise appears here.</p></section>`;
   if(!progEx || !names.includes(progEx)) progEx = names[0];
-  const h = historyFor(progEx).slice(-30);
-  const bestKg = Math.max(...h.map(p => p.kg));
-  const bestE = Math.max(...h.map(p => p.e1rm));
-  const recent = h.slice(-6).reverse();
+  const all = historyFor(progEx), days = PROG_RANGES.find(r => r[0] === progRange)[2];
+  const cut = days ? addDays(todayStr(), -days) : "";
+  let h = all.filter(p => p.date >= cut); if(!h.length) h = all.slice(-1);
+  const [mLabel, val] = PROG_METRICS[progMetric];
+  const bestKg = Math.max(...all.map(p => p.kg)), bestE = Math.max(...all.map(p => p.e1rm));
+  const first = val(h[0]), last = val(h[h.length-1]), chg = first > 0 ? (last - first) / first * 100 : 0;
+  const sel = progPt != null && progPt < h.length ? progPt : h.length - 1, sp = h[sel];
+  const isPR = sp.e1rm >= bestE - 1e-9;
+  const recent = all.slice(-6).reverse();
+  // weekly sets per muscle
+  const wk = addDays(mondayStr(), -7 * volWeek), counts = setsPerMuscle(wk, addDays(wk, 6)), band = volBand();
+  const inBand = VOL_GROUPS.filter(([g]) => counts[g] >= band[0] && counts[g] <= band[1]).length;
+  const low = VOL_GROUPS.filter(([g]) => counts[g] > 0 && counts[g] < band[0]).map(([g]) => g);
+  // weekly totals, last 8 weeks
+  const thisW = mondayStr(), setBars = [], volBars = [];
+  for(let i = 7; i >= 0; i--){ const w = addDays(thisW, -7*i), ss = sessions.filter(s => s.date >= w && s.date <= addDays(w, 6));
+    setBars.push({ w, v: ss.reduce((a, s) => a + (s.entries || []).reduce((b, e) => b + e.sets.length, 0), 0) });
+    volBars.push({ w, v: ss.reduce((a, s) => a + (s.entries || []).reduce((b, e) => b + e.sets.reduce((c, x) => c + num(x.kg) * num(x.reps), 0), 0), 0) }); }
   return `${bannerHtml()}
     <section class="card">
       <label class="field" for="progSel">Exercise<select id="progSel">${names.map(n => `<option ${n === progEx ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></label>
       <div class="tiles">
         <div class="tile"><b>${kg(bestKg)}</b><span>Best weight, kg</span></div>
         <div class="tile"><b>${kg(Math.round(bestE*2)/2)}</b><span>Est. 1-rep max, kg</span></div>
-        <div class="tile"><b>${h.length}</b><span>Sessions</span></div>
+        <div class="tile"><b>${all.length}</b><span>Sessions</span></div>
       </div>
     </section>
-    <section class="card chart"><h3>Top set weight (kg)</h3>${chartSvg(h)}</section>
-    <section class="card"><h3>Recent</h3><div class="recent">${recent.map(p => `<div class="ln"><span>${esc(fmtDate(p.date))}</span><span>${p.sets.map(x => `${kg(x.kg)}×${x.reps}`).join("  ")}</span></div>`).join("")}</div>
+    <section class="card chart">
+      ${segHtml(Object.entries(PROG_METRICS).map(([k, m]) => [k, m[0]]), progMetric, "prog-metric")}
+      <div class="row between" style="margin-top:4px"><h3>${esc(mLabel)} (kg)</h3>${h.length > 1 ? `<span class="chip ${chg >= 0 ? "good" : "info"}">${chg >= 0 ? "▲" : "▼"} ${Math.abs(Math.round(chg))}%</span>` : ""}</div>
+      ${trendSvg(h, val, sel)}
+      <div class="row between" style="background:var(--bg);border-radius:10px;padding:10px 12px">
+        <span><b>${esc(fmtDateLong(sp.date))}</b>${isPR ? ` <span class="chip good">Best</span>` : ""}<br><small class="muted">${sp.sets.map(x => `${kg(x.kg)}×${x.reps}`).join("  ")}</small></span>
+        <b style="font-family:var(--display);font-size:24px">${fmtBig(val(sp))}<small class="muted" style="font-size:12px"> kg</small></b></div>
+      ${segHtml(PROG_RANGES.map(r => [r[0], r[1]]), progRange, "prog-range")}
+      <p class="muted">Tap the chart to see any session. The dashed line is your overall trend.${progMetric === "vol" ? " Volume is weight × reps added up over every set." : ""}</p>
+    </section>
+    <section class="card chart">
+      <div class="row between"><h3>Hard sets per muscle</h3><span class="muted">${band[2]} target</span></div>
+      ${segHtml([["0", "This week"], ["1", "Last week"]], String(volWeek), "vol-week")}
+      ${muscleBarsHtml(counts, band)}
+      <p class="muted">${inBand} of ${VOL_GROUPS.length} muscles in the target range.${low.length ? ` Low: ${esc(low.join(", "))}.` : ""} Main muscles count a full set, helper muscles half a set. Green is on target, orange is under, blue is over.</p>
+    </section>
+    <section class="card"><h3>Sets per week</h3>${weeklyBarsSvg(setBars, "Sets")}</section>
+    <section class="card"><h3>Volume per week (kg)</h3>${weeklyBarsSvg(volBars, "Volume")}</section>
+    <section class="card"><h3>Recent ${esc(progEx)}</h3><div class="recent">${recent.map(p => `<div class="ln"><span>${esc(fmtDate(p.date))}</span><span>${p.sets.map(x => `${kg(x.kg)}×${x.reps}`).join("  ")}</span></div>`).join("")}</div>
       <p class="muted">Est. 1-rep max uses the Epley formula: weight × (1 + reps ÷ 30).</p></section>
     ${renderMilestones()}`;
 }
 
 function renderSetup(){
   if(!setupDraft) setupDraft = clone(cfg);
-  const progBtns = Object.entries(PRESETS).map(([k, p]) => `<button class="split-btn ${cfg.program === k ? "next" : ""}" data-action="preset" data-p="${k}" aria-pressed="${cfg.program === k}">${cfg.program === k ? `<span class="tag">Current</span>` : `<span class="tag" style="visibility:hidden">.</span>`}<strong style="font-size:20px">${p.label}</strong><span>${p.sub}</span></button>`).join("");
+  const progBtn = ([k, p]) => `<button class="split-btn ${cfg.program === k ? "next" : ""}" data-action="preset" data-p="${k}" aria-pressed="${cfg.program === k}">${cfg.program === k ? `<span class="tag">Current</span>` : p.level ? `<span class="tag">${p.level}</span>` : `<span class="tag" style="visibility:hidden">.</span>`}<strong style="font-size:20px">${p.label}</strong><span>${p.sub}</span></button>`;
+  const progBtns = Object.entries(PRESETS).filter(([, p]) => !p.level).map(progBtn).join("");
+  const levelBtns = Object.entries(PRESETS).filter(([, p]) => p.level).map(progBtn).join("");
   const splitRows = cfg.order.map((k, i) => { const sp = cfg.splits[k];
     return `<li><span><b>${esc(sp.name)}</b><br><small class="muted">${sp.exercises.length} exercises: ${esc(sp.exercises.slice(0, 3).map(e => e.name).join(", "))}${sp.exercises.length > 3 ? "…" : ""}</small></span>
       <button class="icon-btn" data-action="split-edit" data-k="${esc(k)}">Edit</button>
@@ -1611,6 +1815,21 @@ function renderSetup(){
   return `${bannerHtml()}
     <section class="card"><h2>Program</h2><div class="split-pick">${progBtns}</div>
       <p class="muted">Picking a program replaces your split days with its days. Past workouts are never touched.</p></section>
+    <section class="card"><h2>Programs by level</h2><div class="split-pick">${levelBtns}</div>
+      <p class="muted">Sets and reps are set per exercise. Not sure which? If you have trained under a year, or your lifts still go up most weeks, start at Beginner.</p>
+      <details><summary class="muted"><b>How these are built (the science)</b></summary>
+        <ul style="margin:8px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:6px;font-size:14px">
+          <li><b>Train each muscle about twice a week.</b> Splitting weekly sets over 2 sessions beats cramming them into one.</li>
+          <li><b>Weekly hard sets per muscle:</b> beginner 6-10, intermediate 10-15, advanced 15-20. More is not always better; add sets only when progress stalls and you recover well.</li>
+          <li><b>Go close to failure.</b> End most sets with 1-3 reps left in the tank. Isolations (curls, raises) can go to failure; heavy squats and deadlifts should not.</li>
+          <li><b>Reps:</b> anything from about 5 to 30 builds muscle if the set is hard. Compounds sit at 5-10, isolations at 10-15.</li>
+          <li><b>Rest:</b> 2-3 min on big compounds, 1-2 min on isolations. Short rest cuts the reps you can do.</li>
+          <li><b>Progress (double progression):</b> stay at a weight until you hit the target reps on every set, then add one weight step. The app suggests this for you.</li>
+          <li><b>Deload</b> every 6-8 weeks, or when lifts drop for 2 sessions in a row: same exercises, about half the sets.</li>
+          <li><b>Forearms:</b> rows, pull-ups and deadlifts train grip, but direct wrist curls and reverse curls (2-3 sets, 12-20 reps) are what grow them.</li>
+        </ul>
+        <p class="muted" style="margin-top:8px">Based on the research reviews of Brad Schoenfeld and James Krieger, and the programming of Jeff Nippard and Mike Israetel. General guidance, not medical advice.</p>
+      </details></section>
     <section class="card"><h2>Your split days</h2>
       <ul class="ex-list">${splitRows}</ul>
       <button class="btn" data-action="split-new">+ New split day</button>
@@ -1626,7 +1845,9 @@ function renderSetup(){
       <p class="muted">Default sets and reps for exercises you add. When you hit every target rep on every set, the next session suggests adding one weight step.</p>
     </section>
     <button class="btn primary" data-action="save-setup" style="min-height:52px">Save setup</button>
-    ${dataCardHtml()}`;
+    ${dataCardHtml()}
+    ${patchNotesHtml()}
+    <p class="muted" style="text-align:center">OnlyPains v${APP_VERSION}</p>`;
 }
 
 function hubSeg(){
@@ -1652,6 +1873,12 @@ document.addEventListener("click", async ev => {
   const row = b.closest(".set");
   const ei = row ? +row.dataset.e : +b.dataset.e, si = row ? +row.dataset.s : null;
 
+  if(a === "notes-ok"){ markSeen(); render(); return; }
+  if(a === "notes-all"){ markSeen(); view = "setup"; render(); document.getElementById("patchNotes")?.scrollIntoView(); return; }
+  if(a === "prog-metric"){ progMetric = b.dataset.v; render(); return; }
+  if(a === "prog-range"){ progRange = b.dataset.v; progPt = null; render(); return; }
+  if(a === "prog-pt"){ progPt = +b.dataset.i; render(); return; }
+  if(a === "vol-week"){ volWeek = +b.dataset.v; render(); return; }
   if(a === "start") return openPicker("session", b.dataset.split);
   if(a === "start-custom") return openPicker("session", null);
   if(a === "pk-cancel"){ const back = pick && pick.mode === "template" ? "setup" : "log"; pick = null; view = back; render(); window.scrollTo(0, 0); return; }
@@ -1752,7 +1979,7 @@ document.addEventListener("input", ev => {
   saveDraftLocal();
 });
 document.addEventListener("change", ev => {
-  if(ev.target.id === "progSel"){ progEx = ev.target.value; render(); }
+  if(ev.target.id === "progSel"){ progEx = ev.target.value; progPt = null; render(); }
   if(ev.target.id === "pk-save" && pick){ pick.saveBack = ev.target.checked; }
   if(ev.target.id === "cmpGymA"){ cmpGymA = ev.target.value; cmpGymB = null; render(); }
   if(ev.target.id === "cmpGymB"){ cmpGymB = ev.target.value; render(); }
