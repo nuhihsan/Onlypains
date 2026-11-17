@@ -8,7 +8,8 @@ A phone-first web app for logging gym splits, runs, food and body measurements. 
 - **Programs:** Upper/Lower, Full body and Push/Pull/Legs, plus Beginner (full body 3x), Intermediate (upper/lower 4x) and Advanced (PPL 6x) programs with per-exercise sets and reps, built on evidence-based volume, frequency and effort guidelines. The exercise library covers chest, back, shoulders, arms, forearms, legs, glutes and core.
 - **Run:** manual entry or import from Strava (GPX or `activities.csv`) and Garmin (TCX). Shows distance, pace, heart rate, cadence, weekly km and pace trend.
 - **Food:** type what you ate ("2 roti canai, teh tarik") and calories and protein are estimated from a built-in list of about 180 Malaysian and gym foods. Foods you add yourself are remembered.
-- **Progress:** lift charts, personal records, milestones, this period vs last, workout vs workout, run vs run.
+- **Progress:** tappable lift charts (top set, est. 1RM or volume over 1M to All, with trend line), hard sets per muscle vs your target, sets and volume per week, personal records, milestones, this period vs last, workout vs workout, run vs run.
+- **Versions:** the app shows its version and patch notes in Setup, and a "What's new" card after each update.
 - **Body:** weight, height, waist, body fat, BMI (Asian cut-offs), plus the details used to suggest daily calories (Mifflin-St Jeor) and protein by goal.
 
 ## Where your data lives
