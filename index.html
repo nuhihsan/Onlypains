@@ -229,7 +229,7 @@ details summary{cursor:pointer;min-height:32px;display:flex;align-items:center}
 
 <script>
 /* ---------- exercise library, programs & the exercise picker ---------- */
-const GROUPS = [["chest","Chest"],["back","Back"],["shoulders","Shoulders"],["biceps","Biceps"],["triceps","Triceps"],["legs","Legs"],["glutes","Glutes"],["core","Core"]];
+const GROUPS = [["chest","Chest"],["back","Back"],["shoulders","Shoulders"],["biceps","Biceps"],["triceps","Triceps"],["forearms","Forearms"],["legs","Legs"],["glutes","Glutes"],["core","Core"]];
 const GROUP_NAME = Object.fromEntries([...GROUPS, ["other","Other"], ["all","All"]]);
 const EX_LIB = `chest|Bench Press|barbell
 chest|Incline Bench Press|barbell
@@ -285,6 +285,15 @@ triceps|Close-Grip Bench Press|barbell
 triceps|Dips|bodyweight
 triceps|Bench Dips|bodyweight
 triceps|Tricep Kickback|dumbbell
+forearms|Wrist Curl|dumbbell
+forearms|Reverse Wrist Curl|dumbbell
+forearms|Behind-the-Back Wrist Curl|barbell
+forearms|Cable Wrist Curl|cable
+forearms|Reverse Curl|barbell
+forearms|Wrist Roller|bodyweight
+forearms|Farmer's Carry|dumbbell
+forearms|Dead Hang|bodyweight
+forearms|Plate Pinch|bodyweight
 legs|Squat|barbell
 legs|Front Squat|barbell
 legs|Leg Press|machine
@@ -324,11 +333,33 @@ const PRESETS = {
     ["push", "Push", ["Bench Press", "Overhead Press", "Incline Dumbbell Press", "Lateral Raise", "Tricep Pushdown", "Overhead Tricep Extension"]],
     ["pull", "Pull", ["Lat Pulldown", "Barbell Row", "Seated Cable Row", "Face Pull", "Bicep Curl", "Hammer Curl"]],
     ["legs", "Legs", ["Squat", "Romanian Deadlift", "Leg Press", "Leg Curl", "Leg Extension", "Calf Raise"]]] },
-  custom: { label: "Custom", sub: "Your own split days" }
+  custom: { label: "Custom", sub: "Your own split days" },
+  /* Level programs. Each exercise is [name, sets, reps]. Built on the evidence-based basics popularised by
+     Jeff Nippard, Mike Israetel and Brad Schoenfeld's research: each muscle about 2x a week, roughly
+     6-10 hard sets per muscle a week for beginners, 10-15 for intermediates, 15-20 for advanced,
+     compounds in lower reps, isolations in higher reps, all taken close to failure (1-3 reps in reserve). */
+  beg: { level: "Beginner", label: "Full body 3x", sub: "0-1 year lifting · 3 days a week", days: [2, 3], splits: [
+    ["begA", "Full body A", [["Squat", 3, 8], ["Dumbbell Bench Press", 3, 10], ["Lat Pulldown", 3, 10], ["Romanian Deadlift", 3, 10], ["Lateral Raise", 2, 12], ["Tricep Pushdown", 2, 12]]],
+    ["begB", "Full body B", [["Leg Press", 3, 10], ["Seated Cable Row", 3, 10], ["Dumbbell Shoulder Press", 3, 10], ["Leg Curl", 2, 12], ["Bicep Curl", 2, 12], ["Wrist Curl", 2, 15]]]] },
+  int: { level: "Intermediate", label: "Upper / Lower 4x", sub: "1-3 years · 4 days a week", days: [3, 4], splits: [
+    ["intUA", "Upper A", [["Bench Press", 3, 6], ["Barbell Row", 3, 8], ["Overhead Press", 3, 8], ["Lat Pulldown", 3, 10], ["Lateral Raise", 3, 12], ["EZ-Bar Curl", 3, 10], ["Overhead Tricep Extension", 3, 10]]],
+    ["intLA", "Lower A", [["Squat", 3, 6], ["Romanian Deadlift", 3, 8], ["Leg Extension", 3, 12], ["Leg Curl", 3, 12], ["Calf Raise", 3, 12], ["Hanging Leg Raise", 3, 12]]],
+    ["intUB", "Upper B", [["Incline Dumbbell Press", 3, 10], ["Pull-Up", 3, 8], ["Seated Cable Row", 3, 10], ["Cable Lateral Raise", 3, 15], ["Rope Pushdown", 3, 12], ["Hammer Curl", 3, 12], ["Wrist Curl", 2, 15]]],
+    ["intLB", "Lower B", [["Hack Squat", 3, 10], ["Hip Thrust", 3, 10], ["Bulgarian Split Squat", 3, 10], ["Leg Curl", 3, 12], ["Hip Adduction Machine", 3, 12], ["Seated Calf Raise", 3, 15]]]] },
+  adv: { level: "Advanced", label: "Push / Pull / Legs 6x", sub: "3+ years · 5-6 days a week", days: [5, 6], splits: [
+    ["advPA", "Push A", [["Bench Press", 4, 6], ["Overhead Press", 3, 8], ["Incline Dumbbell Press", 3, 10], ["Cable Lateral Raise", 4, 15], ["Overhead Tricep Extension", 3, 10], ["Rope Pushdown", 3, 12]]],
+    ["advPLA", "Pull A", [["Deadlift", 3, 5], ["Pull-Up", 4, 8], ["Barbell Row", 3, 8], ["Face Pull", 3, 15], ["Incline Dumbbell Curl", 3, 10], ["Wrist Curl", 3, 15]]],
+    ["advLA", "Legs A", [["Squat", 4, 6], ["Romanian Deadlift", 3, 8], ["Leg Press", 3, 12], ["Leg Curl", 3, 12], ["Calf Raise", 4, 12], ["Hanging Leg Raise", 3, 12]]],
+    ["advPB", "Push B", [["Incline Bench Press", 4, 8], ["Dumbbell Shoulder Press", 3, 10], ["Cable Crossover", 3, 12], ["Lateral Raise", 4, 15], ["Skull Crusher", 3, 10], ["Dips", 3, 10]]],
+    ["advPLB", "Pull B", [["Lat Pulldown", 4, 10], ["Seated Cable Row", 3, 10], ["Rear Delt Fly", 3, 15], ["Preacher Curl", 3, 12], ["Hammer Curl", 3, 12], ["Reverse Curl", 3, 12]]],
+    ["advLB", "Legs B", [["Hack Squat", 4, 10], ["Hip Thrust", 3, 10], ["Bulgarian Split Squat", 3, 10], ["Leg Extension", 3, 15], ["Seated Calf Raise", 4, 15], ["Cable Crunch", 3, 12]]]] }
 };
 function presetSplits(p, sets, reps){
   const splits = {}, order = [];
-  for(const [k, name, ex] of PRESETS[p].splits){ splits[k] = { name, exercises: ex.map(n => ({ name: n, sets, reps })) }; order.push(k); }
+  for(const [k, name, ex] of PRESETS[p].splits){
+    splits[k] = { name, exercises: ex.map(n => Array.isArray(n) ? { name: n[0], sets: n[1], reps: n[2] } : { name: n, sets, reps }) };
+    order.push(k);
+  }
   return { splits, order };
 }
 function clampInt(v, lo, hi, d){ v = Math.round(num(v)); return v >= lo && v <= hi ? v : d; }
@@ -349,7 +380,7 @@ function allExercises(){
 }
 /* ---------- muscle map: front and back view, main muscles bright, helpers faint ---------- */
 const MUSCLE_NAME = { chest: "Chest", chest_upper: "Upper chest", delt_front: "Front delts", delt_side: "Side delts", delt_rear: "Rear delts", traps: "Traps", lats: "Lats", lower_back: "Lower back", biceps: "Biceps", triceps: "Triceps", forearms: "Forearms", abs: "Abs", obliques: "Obliques", quads: "Quads", adductors: "Inner thighs", hamstrings: "Hamstrings", glutes: "Glutes", calves: "Calves" };
-const GROUP_MUSCLES = { chest: [["chest","chest_upper"],[]], back: [["lats","traps","lower_back"],[]], shoulders: [["delt_front","delt_side","delt_rear"],[]], biceps: [["biceps"],["forearms"]], triceps: [["triceps"],[]], legs: [["quads","hamstrings","calves"],["glutes","adductors"]], glutes: [["glutes"],["hamstrings"]], core: [["abs","obliques"],[]], other: [[],[]] };
+const GROUP_MUSCLES = { chest: [["chest","chest_upper"],[]], back: [["lats","traps","lower_back"],[]], shoulders: [["delt_front","delt_side","delt_rear"],[]], biceps: [["biceps"],["forearms"]], triceps: [["triceps"],[]], forearms: [["forearms"],[]], legs: [["quads","hamstrings","calves"],["glutes","adductors"]], glutes: [["glutes"],["hamstrings"]], core: [["abs","obliques"],[]], other: [[],[]] };
 const EX_MUSCLES = {
   "Bench Press": "chest|delt_front,triceps", "Incline Bench Press": "chest_upper|delt_front,triceps", "Decline Bench Press": "chest|triceps",
   "Dumbbell Bench Press": "chest|delt_front,triceps", "Incline Dumbbell Press": "chest_upper,delt_front|triceps", "Dumbbell Flyes": "chest,chest_upper|delt_front",
@@ -366,6 +397,8 @@ const EX_MUSCLES = {
   "Incline Dumbbell Curl": "biceps|", "Cable Curl": "biceps|forearms", "Concentration Curl": "biceps|",
   "Tricep Pushdown": "triceps|", "Rope Pushdown": "triceps|", "Overhead Tricep Extension": "triceps|", "Skull Crusher": "triceps|", "Close-Grip Bench Press": "triceps,chest|delt_front",
   "Dips": "triceps,chest|delt_front", "Bench Dips": "triceps|delt_front", "Tricep Kickback": "triceps|",
+  "Wrist Curl": "forearms|", "Reverse Wrist Curl": "forearms|", "Behind-the-Back Wrist Curl": "forearms|", "Cable Wrist Curl": "forearms|",
+  "Reverse Curl": "forearms|biceps", "Wrist Roller": "forearms|delt_front", "Farmer's Carry": "forearms,traps|abs,obliques", "Dead Hang": "forearms|lats", "Plate Pinch": "forearms|",
   "Squat": "quads,glutes|hamstrings,lower_back", "Front Squat": "quads|glutes,abs", "Leg Press": "quads,glutes|hamstrings", "Hack Squat": "quads|glutes", "Goblet Squat": "quads,glutes|abs",
   "Bulgarian Split Squat": "quads,glutes|hamstrings", "Lunges": "quads,glutes|hamstrings", "Step-Up": "quads,glutes|hamstrings", "Leg Extension": "quads|", "Leg Curl": "hamstrings|calves",
   "Romanian Deadlift": "hamstrings,glutes|lower_back", "Stiff-Leg Deadlift": "hamstrings|glutes,lower_back", "Calf Raise": "calves|", "Seated Calf Raise": "calves|",
@@ -506,9 +539,11 @@ async function applyPreset(p){
   if(p === cfg.program) return;
   const next = clone(cfg);
   if(p === "custom"){ next.program = "custom"; await saveCfg(next, "Custom program: add or edit your splits below"); render(); return; }
-  if(!(await ask(`Switch to ${PRESETS[p].label}? Your split days are replaced with its days. Past workouts are kept.`, "Switch"))) return;
+  const pr = PRESETS[p], title = pr.level ? `${pr.level}: ${pr.label}` : pr.label;
+  if(!(await ask(`Switch to ${title}? Your split days are replaced with its days${pr.days ? ` and your weekly target becomes ${pr.days[0]}-${pr.days[1]} sessions` : ""}. Past workouts are kept.`, "Switch"))) return;
   Object.assign(next, presetSplits(p, cfg.setTarget, cfg.repTarget), { program: p });
-  if(await saveCfg(next, `Switched to ${PRESETS[p].label}`)){ setupDraft = null; render(); }
+  if(pr.days){ next.weekMin = pr.days[0]; next.weekMax = pr.days[1]; }
+  if(await saveCfg(next, `Switched to ${title}`)){ setupDraft = null; render(); }
 }
 
 const DEFAULT_CFG = {
@@ -1601,7 +1636,9 @@ function renderProgress(){
 
 function renderSetup(){
   if(!setupDraft) setupDraft = clone(cfg);
-  const progBtns = Object.entries(PRESETS).map(([k, p]) => `<button class="split-btn ${cfg.program === k ? "next" : ""}" data-action="preset" data-p="${k}" aria-pressed="${cfg.program === k}">${cfg.program === k ? `<span class="tag">Current</span>` : `<span class="tag" style="visibility:hidden">.</span>`}<strong style="font-size:20px">${p.label}</strong><span>${p.sub}</span></button>`).join("");
+  const progBtn = ([k, p]) => `<button class="split-btn ${cfg.program === k ? "next" : ""}" data-action="preset" data-p="${k}" aria-pressed="${cfg.program === k}">${cfg.program === k ? `<span class="tag">Current</span>` : p.level ? `<span class="tag">${p.level}</span>` : `<span class="tag" style="visibility:hidden">.</span>`}<strong style="font-size:20px">${p.label}</strong><span>${p.sub}</span></button>`;
+  const progBtns = Object.entries(PRESETS).filter(([, p]) => !p.level).map(progBtn).join("");
+  const levelBtns = Object.entries(PRESETS).filter(([, p]) => p.level).map(progBtn).join("");
   const splitRows = cfg.order.map((k, i) => { const sp = cfg.splits[k];
     return `<li><span><b>${esc(sp.name)}</b><br><small class="muted">${sp.exercises.length} exercises: ${esc(sp.exercises.slice(0, 3).map(e => e.name).join(", "))}${sp.exercises.length > 3 ? "…" : ""}</small></span>
       <button class="icon-btn" data-action="split-edit" data-k="${esc(k)}">Edit</button>
@@ -1611,6 +1648,21 @@ function renderSetup(){
   return `${bannerHtml()}
     <section class="card"><h2>Program</h2><div class="split-pick">${progBtns}</div>
       <p class="muted">Picking a program replaces your split days with its days. Past workouts are never touched.</p></section>
+    <section class="card"><h2>Programs by level</h2><div class="split-pick">${levelBtns}</div>
+      <p class="muted">Sets and reps are set per exercise. Not sure which? If you have trained under a year, or your lifts still go up most weeks, start at Beginner.</p>
+      <details><summary class="muted"><b>How these are built (the science)</b></summary>
+        <ul style="margin:8px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:6px;font-size:14px">
+          <li><b>Train each muscle about twice a week.</b> Splitting weekly sets over 2 sessions beats cramming them into one.</li>
+          <li><b>Weekly hard sets per muscle:</b> beginner 6-10, intermediate 10-15, advanced 15-20. More is not always better; add sets only when progress stalls and you recover well.</li>
+          <li><b>Go close to failure.</b> End most sets with 1-3 reps left in the tank. Isolations (curls, raises) can go to failure; heavy squats and deadlifts should not.</li>
+          <li><b>Reps:</b> anything from about 5 to 30 builds muscle if the set is hard. Compounds sit at 5-10, isolations at 10-15.</li>
+          <li><b>Rest:</b> 2-3 min on big compounds, 1-2 min on isolations. Short rest cuts the reps you can do.</li>
+          <li><b>Progress (double progression):</b> stay at a weight until you hit the target reps on every set, then add one weight step. The app suggests this for you.</li>
+          <li><b>Deload</b> every 6-8 weeks, or when lifts drop for 2 sessions in a row: same exercises, about half the sets.</li>
+          <li><b>Forearms:</b> rows, pull-ups and deadlifts train grip, but direct wrist curls and reverse curls (2-3 sets, 12-20 reps) are what grow them.</li>
+        </ul>
+        <p class="muted" style="margin-top:8px">Based on the research reviews of Brad Schoenfeld and James Krieger, and the programming of Jeff Nippard and Mike Israetel. General guidance, not medical advice.</p>
+      </details></section>
     <section class="card"><h2>Your split days</h2>
       <ul class="ex-list">${splitRows}</ul>
       <button class="btn" data-action="split-new">+ New split day</button>
