@@ -1,15 +1,24 @@
-# Feedback relay
+# OnlyPains Worker
 
-`feedback-worker.js` runs on Cloudflare Workers and forwards feedback from the app's Feedback tab to your Telegram through your bot. The bot token stays in Cloudflare as a secret and is never in the app or this repo.
+`onlypains-worker.js` runs on Cloudflare Workers (free plan) and does three things:
 
-## Set up
+- **Accounts:** username and password sign-in. Passwords are stored only as salted PBKDF2 hashes.
+- **Cloud sync:** keeps each user's log in the D1 database `onlypains`, so data survives deleting the app or changing phones.
+- **Feedback:** forwards the Feedback tab to Telegram through your bot, tagged with the sender's username and app version.
 
-1. **Create the Worker.** Cloudflare dashboard > Workers & Pages > Create > Create Worker. Name it `onlypains-feedback`, Deploy, then Edit code. Replace everything with `feedback-worker.js` and Deploy.
-2. **Let the bot message you.** In Telegram, open your bot and send it `/start`.
-3. **Find your chat id.** In a browser, open `https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates` (your token in place of `<YOUR_TOKEN>`). Find `"chat":{"id":123456789` and copy the number.
-4. **Add the secrets.** Worker > Settings > Variables and Secrets > Add, type **Secret**: `BOT_TOKEN` (from BotFather) and `CHAT_ID` (from step 3). Deploy.
-5. **Point the app at it.** Put the Worker URL (e.g. `https://onlypains-feedback.<you>.workers.dev`) in `FEEDBACK_URL` in `index.html`.
+## Set up (one time)
 
-Only requests from `https://nuhihsan.github.io` are accepted. If you move the app to another address, add it to `ALLOWED_ORIGINS`.
+The D1 database `onlypains` and its tables already exist (`schema.sql` has the table definitions if you ever need to recreate them).
 
-If the token ever leaks, send `/revoke` to BotFather and update the `BOT_TOKEN` secret.
+1. **Replace the code.** Cloudflare dashboard > Workers & Pages > `onlypains-feedback` > Edit code. Replace everything with `onlypains-worker.js`, then Deploy.
+2. **Connect the database.** Worker > Settings > Bindings > Add > D1 database. Variable name `DB`, database `onlypains`. Save and deploy.
+3. **Check the secrets.** Worker > Settings > Variables and Secrets should have `BOT_TOKEN` and `CHAT_ID` (type Secret). To find your chat id: message your bot `/start`, then open `https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates` and copy the number after `"chat":{"id":`.
+4. **Point the app at it.** Put the Worker URL (e.g. `https://onlypains-feedback.<you>.workers.dev`, shown on the Worker's overview page) in `WORKER_URL` in `index.html`.
+
+Only requests from `https://nuhihsan.github.io` are accepted. If you move the app, add the new address to `ALLOWED_ORIGINS`.
+
+## Looking after it
+
+- **Forgotten password:** there is no email reset. Delete the user's sessions and set a new password by signing them up again under a new name, or ask Claude to reset it in D1.
+- **Bot token leaked:** send `/revoke` to BotFather and update the `BOT_TOKEN` secret.
+- **Free plan limits:** 100,000 Worker requests a day and 5 GB of D1 storage, far more than a group of friends will use.
