@@ -1209,9 +1209,9 @@ function createLocalDB(){
   function docRef(path){
     return { id: path.split("/").pop(), path,
       async get(){ return snapDoc(path); },
-      async set(v){ data[path] = JSON.parse(JSON.stringify(v)); persist(); notify(); },
-      async update(v){ if(data[path] === undefined) throw { code: "invalid_argument", message: "missing" }; data[path] = Object.assign({}, data[path], JSON.parse(JSON.stringify(v))); persist(); notify(); },
-      async delete(){ delete data[path]; persist(); notify(); },
+      async set(v){ data[path] = JSON.parse(JSON.stringify(v)); persist(); onLocalWrite(path); notify(); },
+      async update(v){ if(data[path] === undefined) throw { code: "invalid_argument", message: "missing" }; data[path] = Object.assign({}, data[path], JSON.parse(JSON.stringify(v))); persist(); onLocalWrite(path); notify(); },
+      async delete(){ delete data[path]; persist(); onLocalWrite(path); notify(); },
       onSnapshot(next){ const l = () => next(snapDoc(path)); listeners.add(l); setTimeout(l, 0); return () => listeners.delete(l); },
       collection(sub){ return collRef(path + "/" + sub); } };
   }
@@ -1229,7 +1229,149 @@ function createLocalDB(){
       onSnapshot(next){ const l = () => next(run()); listeners.add(l); setTimeout(l, 0); return () => listeners.delete(l); } };
   }
   function collRef(path){ const q = query(path); return Object.assign(q, { path, doc: id => docRef(path + "/" + (id || ("d" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)))) }); }
-  return { doc: docRef, collection: collRef };
+  // raw access for cloud sync: these never mark anything as changed
+  const raw = { get: p => data[p], keys: () => Object.keys(data),
+    apply(list){ for(const c of list){ if(c.del) delete data[c.path]; else data[c.path] = c.data; } persist(); notify(); },
+    clear(){ data = {}; persist(); notify(); } };
+  return { doc: docRef, collection: collRef, raw };
+}
+
+/* ---------- account & cloud sync (Cloudflare Worker + D1, see worker/README.md) ----------
+   The phone stays the main copy, so the app works offline. Every change is queued and pushed;
+   changes from your other devices are pulled. Per document, the newest edit wins. */
+const SYNC_KEY = "onlypains-sync-v1", LOCAL_PRE = "data/users/local/";
+let acct = (() => { try { return JSON.parse(localStorage.getItem(SYNC_KEY)) || null; } catch(e){ return null; } })();
+let syncState = acct ? "idle" : "off", syncTimer = null, syncing = false, syncAgain = false;
+function saveAcct(){ try { if(acct) localStorage.setItem(SYNC_KEY, JSON.stringify(acct)); else localStorage.removeItem(SYNC_KEY); } catch(e){} }
+function onLocalWrite(path){
+  if(!acct || !path.startsWith(LOCAL_PRE)) return;
+  acct.dirty[path.slice(LOCAL_PRE.length)] = Date.now(); saveAcct(); scheduleSync(1500);
+}
+function scheduleSync(ms){ clearTimeout(syncTimer); syncTimer = setTimeout(syncNow, ms); }
+async function api(route, body){
+  const headers = { "Content-Type": "application/json" };
+  if(acct && acct.token) headers.Authorization = "Bearer " + acct.token;
+  let r; try { r = await fetch(WORKER_URL + route, { method: "POST", headers, body: JSON.stringify(body || {}) }); }
+  catch(e){ throw { status: 0, error: "Can't reach the server. Check your connection." }; }
+  let j = {}; try { j = await r.json(); } catch(e){}
+  if(!r.ok) throw { status: r.status, error: j.error || "Something went wrong. Try again." };
+  return j;
+}
+async function syncNow(){
+  if(!acct || !WORKER_URL || !db || !db.raw) return;
+  if(syncing){ syncAgain = true; return; }
+  syncing = true; syncState = "syncing"; updSyncUi();
+  try {
+    for(let round = 0, more = true; more && round < 25; round++){
+      const changes = Object.entries(acct.dirty).slice(0, 500).map(([p, t]) => { const v = db.raw.get(LOCAL_PRE + p); return v === undefined ? { path: p, t, del: true } : { path: p, t, data: v }; });
+      const res = await api("/sync", { since: Math.max(0, (acct.since || 0) - 10000), changes });
+      if(!acct) break;
+      for(const c of changes) if(acct.dirty[c.path] === c.t) delete acct.dirty[c.path]; // unless edited again meanwhile
+      const apply = (res.changes || []).filter(c => !(acct.dirty[c.path] > c.t)).filter(c => {
+        const local = db.raw.get(LOCAL_PRE + c.path);
+        return c.del ? local !== undefined : JSON.stringify(local) !== JSON.stringify(c.data); });
+      if(apply.length) db.raw.apply(apply.map(c => ({ path: LOCAL_PRE + c.path, data: c.data, del: c.del })));
+      acct.since = Math.max(acct.since || 0, res.now || 0); acct.lastSync = Date.now();
+      const info = (acct.hasPassword !== !!res.hasPassword || acct.google !== (res.google || null)); acct.hasPassword = !!res.hasPassword; acct.google = res.google || null; saveAcct();
+      if(info && view === "setup" && !document.activeElement?.matches?.("input")) render();
+      more = !!res.more || Object.keys(acct.dirty).length > 0 && changes.length === 500;
+    }
+    syncState = "ok";
+  } catch(e){
+    if(e && e.status === 401){ acct = null; saveAcct(); syncState = "off"; toast("You were signed out. Sign in again in Setup to keep syncing."); if(view === "setup") render(); }
+    else syncState = e && e.status === 0 ? "offline" : "error";
+  }
+  syncing = false; updSyncUi();
+  if(syncAgain){ syncAgain = false; scheduleSync(300); }
+}
+async function signIn(mode){
+  const u = (document.getElementById("ac-user")?.value || "").trim(), pw = document.getElementById("ac-pass")?.value || "";
+  if(!u || !pw) return toast("Enter a username and password.");
+  if(mode === "signup" && pw.length < 8) return toast("Use a password of at least 8 characters.");
+  if(!db || !db.raw) return toast("Saving isn't available here.");
+  try {
+    finishSignIn(await api(mode === "signup" ? "/auth/signup" : "/auth/login", { username: u, password: pw }), mode === "signup");
+  } catch(e){ toast(e.error || "Couldn't sign in."); }
+}
+async function finishSignIn(r, isNew){
+  // upload what's on this phone, but let anything already in the account win (t = 1 is "older than everything")
+  const dirty = {}; for(const k of db.raw.keys()) if(k.startsWith(LOCAL_PRE)) dirty[k.slice(LOCAL_PRE.length)] = 1;
+  acct = { token: r.token, username: r.username, since: 0, dirty, lastSync: 0 }; saveAcct();
+  toast(isNew ? `Account created. Welcome, ${r.username}!` : `Signed in as ${r.username}`);
+  render(); await syncNow();
+}
+/* Sign in with Google: Google's own button gives us a signed token, the Worker checks it. */
+let gisLoading = null;
+function loadGis(){
+  if(window.google && google.accounts && google.accounts.id) return Promise.resolve();
+  return gisLoading || (gisLoading = new Promise((res, rej) => { const sc = document.createElement("script"); sc.src = "https://accounts.google.com/gsi/client"; sc.async = true; sc.onload = res; sc.onerror = () => { gisLoading = null; rej(); }; document.head.appendChild(sc); }));
+}
+async function mountGoogle(){
+  const el = document.getElementById("gbtn"); if(!el || !GOOGLE_CLIENT_ID) return;
+  try { await loadGis(); } catch(e){ el.innerHTML = `<p class="muted">Couldn't load Google sign-in. Check your connection.</p>`; return; }
+  if(!document.body.contains(el)) return;
+  google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: onGoogle, ux_mode: "popup", auto_select: false, cancel_on_tap_outside: true });
+  google.accounts.id.renderButton(el, { theme: "outline", size: "large", shape: "pill", text: acct ? "continue_with" : "signin_with", width: Math.min(360, Math.max(220, el.clientWidth || 300)) });
+}
+async function onGoogle(resp){
+  if(!resp || !resp.credential) return toast("Google sign-in was cancelled.");
+  if(!db || !db.raw) return toast("Saving isn't available here.");
+  try {
+    const r = await api("/auth/google", { credential: resp.credential });
+    if(r.linked){ acct.google = r.google || "linked"; saveAcct(); toast("Google connected. You can sign in with it now."); render(); return; }
+    finishSignIn(r, !!r.created);
+  } catch(e){ toast(e.error || "Google sign-in didn't work."); }
+}
+const iosHomeApp = () => !!(navigator.standalone);
+async function signOut(){
+  if(!acct) return;
+  if(Object.keys(acct.dirty).length) await syncNow();
+  const pending = acct && Object.keys(acct.dirty).length;
+  if(!(await ask(pending ? "Some changes haven't synced yet and will be lost if you sign out now. Sign out anyway?" : "Sign out? Your log stays safe in your account and is removed from this phone until you sign in again.", "Sign out", !!pending))) return;
+  try { await api("/auth/logout"); } catch(e){}
+  acct = null; saveAcct(); syncState = "off";
+  if(db && db.raw) db.raw.clear();
+  toast("Signed out"); render();
+}
+async function changePassword(){
+  const o = document.getElementById("ac-old")?.value || "", n = document.getElementById("ac-new")?.value || "";
+  if(n.length < 8) return toast("Use a new password of at least 8 characters.");
+  try { await api("/auth/password", { old: o, new: n }); const first = acct.hasPassword === false; acct.hasPassword = true; saveAcct();
+    toast(first ? `Password set. You can now also sign in as ${acct.username} with it.` : "Password changed. Your other devices are signed out."); render(); }
+  catch(e){ toast(e.error || "Couldn't change the password."); }
+}
+function ago(ms){ const m = Math.round((Date.now() - ms) / 60000); return m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m/60)} h ago` : `${Math.round(m/1440)} d ago`; }
+function syncLine(){
+  if(!acct) return "";
+  const n = Object.keys(acct.dirty).length;
+  if(syncState === "syncing") return "Syncing…";
+  if(syncState === "offline") return `Offline. ${n ? `${n} change${n > 1 ? "s" : ""} will sync` : "Will sync"} when you're back online.`;
+  if(syncState === "error") return "Couldn't sync just now. It will try again.";
+  return acct.lastSync ? `All synced · ${ago(acct.lastSync)}` : "Not synced yet";
+}
+function updSyncUi(){ const el = document.getElementById("syncStatus"); if(el) el.textContent = syncLine(); }
+function accountCardHtml(){
+  if(!WORKER_URL || storageMode !== "local") return "";
+  if(acct) return `<section class="card"><div class="row between"><h2>Account</h2><span class="chip good">${esc(acct.username)}</span></div>
+      <p class="muted" id="syncStatus" aria-live="polite">${esc(syncLine())}</p>
+      <p class="muted">Your log is backed up to your account. Sign in with the same username on any phone or browser to pick up where you left off.</p>
+      <div class="row" style="flex-wrap:wrap"><button class="btn" data-action="sync-now">Sync now</button><button class="btn danger" data-action="sign-out">Sign out</button></div>
+      ${GOOGLE_CLIENT_ID ? (acct.google ? `<p class="muted">Google: ${esc(acct.google === "linked" ? "connected" : acct.google)}. You can sign in with Google on any device.</p>`
+        : `<div><p class="muted" style="margin-bottom:6px">Connect Google to also sign in with it:</p><div id="gbtn" style="min-height:44px"></div></div>`) : ""}
+      <details><summary class="muted">${acct.hasPassword === false ? "Add a password" : "Change password"}</summary><div class="fields" style="margin-top:8px">
+        ${acct.hasPassword === false ? `<p class="muted" style="grid-column:1/-1;margin:0">Lets you sign in as <b>${esc(acct.username)}</b> without Google, e.g. in the iPhone home screen app.</p>` : `<label class="field" for="ac-old">Current password<input id="ac-old" type="password" autocomplete="current-password"></label>`}
+        <label class="field" for="ac-new">New password<input id="ac-new" type="password" autocomplete="new-password" minlength="8"></label></div>
+        <button class="btn small" data-action="change-pass" style="margin-top:8px">${acct.hasPassword === false ? "Set password" : "Change password"}</button></details></section>`;
+  return `<section class="card"><h2>Account</h2>
+      <p class="muted">Sign in to back up your log online. Then you can delete the app, change phones or use a laptop and keep everything.</p>
+      ${GOOGLE_CLIENT_ID ? `<div id="gbtn" style="min-height:44px;display:flex;justify-content:center"></div>
+        ${iosHomeApp() ? `<p class="muted">On the iPhone home screen app, Google sign-in sometimes won't open. If so, sign in with Google once in Safari, add a password under Account, then use that password here.</p>` : ""}
+        <p class="muted" style="text-align:center;margin:0">or use a username</p>` : ""}
+      <div class="fields">
+        <label class="field" for="ac-user">Username<input id="ac-user" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="20" placeholder="e.g. nuh"></label>
+        <label class="field" for="ac-pass">Password<input id="ac-pass" type="password" autocomplete="current-password" maxlength="200"></label></div>
+      <div class="row" style="flex-wrap:wrap"><button class="btn primary" data-action="sign-in">Sign in</button><button class="btn" data-action="sign-up">Create account</button></div>
+      <p class="muted">Usernames are 3 to 20 letters, numbers or _. There's no email reset, so keep your password somewhere safe. What's already on this phone is added to your account when you sign in. <a href="privacy.html">Privacy</a></p></section>`;
 }
 
 /* ---------- backup & restore ---------- */
@@ -1269,7 +1411,7 @@ async function restoreBackup(text){
 }
 function dataCardHtml(){
   return `<section class="card"><h2>Your data</h2>
-    <p class="muted">${storageMode === "local" ? "Everything is saved on this phone, in this browser. Nobody else can see it, but clearing your browser data or changing phones would lose it, so download a backup now and then." : "Everything is saved to your Claude account and is private to you."}</p>
+    <p class="muted">${storageMode === "local" ? (acct ? `Saved on this phone and backed up to your account (${esc(acct.username)}). A backup file is still handy as a spare copy.` : `Everything is saved on this phone, in this browser. Nobody else can see it, but clearing your browser data, deleting the app or changing phones would lose it.${WORKER_URL ? " Sign in under Account to back it up online," : ""} or download a backup now and then.`) : "Everything is saved to your Claude account and is private to you."}</p>
     <div class="row" style="flex-wrap:wrap">${storageMode === "local" ? `<button class="btn" data-action="bk-download">Download backup</button>` : ""}<button class="btn" data-action="bk-copy">Copy backup</button>
       <label class="btn" for="bk-file" style="display:inline-flex;align-items:center">Restore from file</label><input id="bk-file" type="file" accept=".json,application/json" hidden></div>
     <details><summary class="muted">Restore by pasting a backup</summary>
@@ -1374,8 +1516,12 @@ async function saveMeasure(){
 /* ---------- feedback via Telegram ---------- */
 // Your Telegram username (without the @). Messages open in a chat with this account.
 const TELEGRAM_USER = "nuh420";
-// Cloudflare Worker that forwards feedback to Telegram through the bot (see worker/README.md). Empty = use the chat link instead.
-const FEEDBACK_URL = "";
+// Your Cloudflare Worker (see worker/README.md). It handles accounts, sync and feedback.
+// Empty = no accounts, and feedback opens a Telegram chat instead.
+const WORKER_URL = "https://onlypains-feedback.nuh-ihsan.workers.dev";
+const FEEDBACK_URL = WORKER_URL ? WORKER_URL + "/feedback" : "";
+// Google OAuth client id (public, not a secret). Empty = no "Sign in with Google" button.
+const GOOGLE_CLIENT_ID = "670371480965-2t7c91c3pk9e36rbojm91q9n936aulua.apps.googleusercontent.com";
 let fbSending = false;
 const fb = { type: "Idea", msg: "", name: "" };
 function fbText(){
@@ -1520,8 +1666,14 @@ async function handleWriteError(e){
 
 /* ---------- app version & patch notes ----------
    Every update: bump APP_VERSION and add an entry at the TOP of PATCH_NOTES (see CLAUDE.md). */
-const APP_VERSION = "1.4.1";
+const APP_VERSION = "1.5";
 const PATCH_NOTES = [
+  { v: "1.5", date: "2026-11-17", items: [
+    "Accounts and cloud sync: sign in under Setup > Account and your log is backed up online",
+    "Sign in with Google, or with a username and password. Connect both to one account if you like",
+    "Delete the app, change phones or use a laptop: sign in again and everything comes back",
+    "Changes sync between your devices automatically, and the app still works offline",
+    "Feedback now sends straight to the developer, with your username and app version" ] },
   { v: "1.4.1", date: "2026-11-17", items: [
     "New OP logo: the O is a weight plate. Shows in the header and on your home screen icon" ] },
   { v: "1.4", date: "2026-11-17", items: [
@@ -1815,6 +1967,7 @@ function renderSetup(){
       <button class="icon-btn" data-action="split-mv" data-k="${esc(k)}" data-d="1" ${i === cfg.order.length - 1 ? "disabled" : ""} aria-label="Move ${esc(sp.name)} later">↓</button>
       <button class="icon-btn" data-action="split-del" data-k="${esc(k)}" aria-label="Delete ${esc(sp.name)}">✕</button></li>`; }).join("");
   return `${bannerHtml()}
+    ${accountCardHtml()}
     <section class="card"><h2>Program</h2><div class="split-pick">${progBtns}</div>
       <p class="muted">Picking a program replaces your split days with its days. Past workouts are never touched.</p></section>
     <section class="card"><h2>Programs by level</h2><div class="split-pick">${levelBtns}</div>
@@ -1863,6 +2016,7 @@ function render(){
   document.querySelectorAll("[data-view]").forEach(b => b.setAttribute("aria-current", b.dataset.view === navView ? "page" : "false"));
   document.getElementById("finishBar").hidden = !(view === "log" && draft);
   renderWeekChip();
+  if(view === "setup") mountGoogle();
 }
 
 /* ---------- events ---------- */
@@ -1875,6 +2029,11 @@ document.addEventListener("click", async ev => {
   const row = b.closest(".set");
   const ei = row ? +row.dataset.e : +b.dataset.e, si = row ? +row.dataset.s : null;
 
+  if(a === "sign-in") return signIn("login");
+  if(a === "sign-up") return signIn("signup");
+  if(a === "sign-out") return signOut();
+  if(a === "sync-now") return syncNow();
+  if(a === "change-pass") return changePassword();
   if(a === "notes-ok"){ markSeen(); render(); return; }
   if(a === "notes-all"){ markSeen(); view = "setup"; render(); document.getElementById("patchNotes")?.scrollIntoView(); return; }
   if(a === "prog-metric"){ progMetric = b.dataset.v; render(); return; }
@@ -1895,7 +2054,7 @@ document.addEventListener("click", async ev => {
     if(FEEDBACK_URL){
       if(fbSending) return; fbSending = true; render();
       let ok = false;
-      try { const r = await fetch(FEEDBACK_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: fb.type, msg: fb.msg.trim(), name: fb.name.trim() }) }); ok = r.ok; } catch(e){}
+      try { const r = await fetch(FEEDBACK_URL, { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, acct && acct.token ? { Authorization: "Bearer " + acct.token } : {}), body: JSON.stringify({ type: fb.type, msg: fb.msg.trim(), name: fb.name.trim() || (acct ? acct.username : ""), version: APP_VERSION }) }); ok = r.ok; } catch(e){}
       fbSending = false;
       if(ok){ fb.msg = ""; render(); return toast("Sent. Thanks for the feedback!"); }
       render();
@@ -2053,6 +2212,12 @@ if("serviceWorker" in navigator && location.protocol === "https:" && !window.cla
     try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch(e){}
   }
   draft = loadDraftLocal();
+  if(storageMode === "local" && WORKER_URL){
+    if(acct) syncNow();
+    document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible") scheduleSync(200); });
+    window.addEventListener("online", () => scheduleSync(200));
+    setInterval(() => { if(acct && document.visibilityState === "visible") syncNow(); }, 60000);
+  }
   if(user){ try { const cw = await user.can("data.write"); if(cw === false) status = "readonly"; } catch(e){} }
   cfgRef = db.doc("data/users/" + uid + "/config");
   sessCol = cfgRef.collection("sessions");

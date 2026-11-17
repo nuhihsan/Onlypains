@@ -14,7 +14,7 @@ A phone-first web app for logging gym splits, runs, food and body measurements. 
 
 ## Where your data lives
 
-Everything is saved in your browser on your own device (`localStorage`). Nothing is sent anywhere. Clearing browser data or switching phones loses it, so use **Setup > Your data > Download backup** now and then, and **Restore** to move to another device.
+Everything is saved in your browser on your own device (`localStorage`), so the app works offline. Sign in under **Setup > Account** to back your log up to the cloud (a Cloudflare Worker and D1 database, see `worker/README.md`) and use it on any device. Without an account, use **Setup > Your data > Download backup** now and then.
 
 Each friend who opens the link gets their own separate, private log on their own phone.
 
