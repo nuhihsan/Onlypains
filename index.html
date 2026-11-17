@@ -202,6 +202,7 @@ select,.field input,.field textarea{border:1px solid var(--line);background:var(
 .mstep button{border:0;background:transparent;width:32px;height:32px;font-size:17px;color:var(--muted)}
 .mstep b{min-width:24px;text-align:center;font-variant-numeric:tabular-nums}
 .split-btn.pick-own{border-style:dashed}
+#gbtn iframe{color-scheme:light}
 .ex-list li small{font-size:12px}
 .mini{width:80px;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 8px;min-height:38px;font-size:16px;font-variant-numeric:tabular-nums}
 .cmp tr.cur th,.cmp tr.cur td{color:var(--good);font-weight:700}
@@ -1291,7 +1292,7 @@ async function signIn(mode){
   if(!db || !db.raw) return toast("Saving isn't available here.");
   try {
     finishSignIn(await api(mode === "signup" ? "/auth/signup" : "/auth/login", { username: u, password: pw }), mode === "signup");
-  } catch(e){ toast(e.error || "Couldn't sign in."); }
+  } catch(e){ toast(mode === "login" && e.status === 401 ? "Wrong username or password. New here? Tap Create account." : (e.error || "Couldn't sign in.")); }
 }
 async function finishSignIn(r, isNew){
   // upload what's on this phone, but let anything already in the account win (t = 1 is "older than everything")
@@ -1310,8 +1311,14 @@ async function mountGoogle(){
   const el = document.getElementById("gbtn"); if(!el || !GOOGLE_CLIENT_ID) return;
   try { await loadGis(); } catch(e){ el.innerHTML = `<p class="muted">Couldn't load Google sign-in. Check your connection.</p>`; return; }
   if(!document.body.contains(el)) return;
-  google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: onGoogle, ux_mode: "popup", auto_select: false, cancel_on_tap_outside: true });
-  google.accounts.id.renderButton(el, { theme: "outline", size: "large", shape: "pill", text: acct ? "continue_with" : "signin_with", width: Math.min(360, Math.max(220, el.clientWidth || 300)) });
+  // Signing in: Google takes over the page and sends you back (no popup, so it works on iPhone and the home screen app).
+  // Connecting Google to an account you're already signed in to needs the popup, since it must carry your login.
+  const linking = !!acct;
+  google.accounts.id.initialize(linking
+    ? { client_id: GOOGLE_CLIENT_ID, callback: onGoogle, ux_mode: "popup", auto_select: false }
+    : { client_id: GOOGLE_CLIENT_ID, ux_mode: "redirect", login_uri: WORKER_URL + "/auth/google-redirect", auto_select: false });
+  const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+  google.accounts.id.renderButton(el, { theme: dark ? "filled_black" : "outline", size: "large", shape: "pill", text: linking ? "continue_with" : "signin_with", width: Math.min(360, Math.max(220, el.clientWidth || 300)) });
 }
 async function onGoogle(resp){
   if(!resp || !resp.credential) return toast("Google sign-in was cancelled.");
@@ -1323,6 +1330,17 @@ async function onGoogle(resp){
   } catch(e){ toast(e.error || "Google sign-in didn't work."); }
 }
 const iosHomeApp = () => !!(navigator.standalone);
+// Coming back from Google's sign-in page: the Worker puts a one-time login in the #fragment (never sent to any server)
+function takeGoogleReturn(){
+  if(!/^#(gtoken|gerr)=/.test(location.hash)) return;
+  const q = new URLSearchParams(location.hash.slice(1));
+  try { history.replaceState(null, "", location.pathname + location.search); } catch(e){ location.hash = ""; }
+  if(q.get("gerr")){ setTimeout(() => toast(q.get("gerr")), 600); return; }
+  const token = q.get("gtoken") || "", username = q.get("guser") || "";
+  if(!/^[a-f0-9]{64}$/.test(token) || !username) return;
+  view = "setup";
+  finishSignIn({ token, username }, q.get("gnew") === "1");
+}
 async function signOut(){
   if(!acct) return;
   if(Object.keys(acct.dirty).length) await syncNow();
@@ -1365,7 +1383,6 @@ function accountCardHtml(){
   return `<section class="card"><h2>Account</h2>
       <p class="muted">Sign in to back up your log online. Then you can delete the app, change phones or use a laptop and keep everything.</p>
       ${GOOGLE_CLIENT_ID ? `<div id="gbtn" style="min-height:44px;display:flex;justify-content:center"></div>
-        ${iosHomeApp() ? `<p class="muted">On the iPhone home screen app, Google sign-in sometimes won't open. If so, sign in with Google once in Safari, add a password under Account, then use that password here.</p>` : ""}
         <p class="muted" style="text-align:center;margin:0">or use a username</p>` : ""}
       <div class="fields">
         <label class="field" for="ac-user">Username<input id="ac-user" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="20" placeholder="e.g. nuh"></label>
@@ -1666,8 +1683,12 @@ async function handleWriteError(e){
 
 /* ---------- app version & patch notes ----------
    Every update: bump APP_VERSION and add an entry at the TOP of PATCH_NOTES (see CLAUDE.md). */
-const APP_VERSION = "1.5";
+const APP_VERSION = "1.5.1";
 const PATCH_NOTES = [
+  { v: "1.5.1", date: "2026-11-17", items: [
+    "Sign in with Google now opens on the same page instead of a popup, so it works on iPhone and the home screen app",
+    "Google button no longer shows a white box in dark mode",
+    "Clearer message if you tap Sign in before creating an account" ] },
   { v: "1.5", date: "2026-11-17", items: [
     "Accounts and cloud sync: sign in under Setup > Account and your log is backed up online",
     "Sign in with Google, or with a username and password. Connect both to one account if you like",
@@ -2213,6 +2234,7 @@ if("serviceWorker" in navigator && location.protocol === "https:" && !window.cla
   }
   draft = loadDraftLocal();
   if(storageMode === "local" && WORKER_URL){
+    takeGoogleReturn();
     if(acct) syncNow();
     document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible") scheduleSync(200); });
     window.addEventListener("online", () => scheduleSync(200));
