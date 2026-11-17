@@ -1371,7 +1371,7 @@ function accountCardHtml(){
         <label class="field" for="ac-user">Username<input id="ac-user" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="20" placeholder="e.g. nuh"></label>
         <label class="field" for="ac-pass">Password<input id="ac-pass" type="password" autocomplete="current-password" maxlength="200"></label></div>
       <div class="row" style="flex-wrap:wrap"><button class="btn primary" data-action="sign-in">Sign in</button><button class="btn" data-action="sign-up">Create account</button></div>
-      <p class="muted">Usernames are 3 to 20 letters, numbers or _. There's no email reset, so keep your password somewhere safe. What's already on this phone is added to your account when you sign in.</p></section>`;
+      <p class="muted">Usernames are 3 to 20 letters, numbers or _. There's no email reset, so keep your password somewhere safe. What's already on this phone is added to your account when you sign in. <a href="privacy.html">Privacy</a></p></section>`;
 }
 
 /* ---------- backup & restore ---------- */
@@ -1518,10 +1518,10 @@ async function saveMeasure(){
 const TELEGRAM_USER = "nuh420";
 // Your Cloudflare Worker (see worker/README.md). It handles accounts, sync and feedback.
 // Empty = no accounts, and feedback opens a Telegram chat instead.
-const WORKER_URL = "";
+const WORKER_URL = "https://onlypains-feedback.nuh-ihsan.workers.dev";
 const FEEDBACK_URL = WORKER_URL ? WORKER_URL + "/feedback" : "";
 // Google OAuth client id (public, not a secret). Empty = no "Sign in with Google" button.
-const GOOGLE_CLIENT_ID = "";
+const GOOGLE_CLIENT_ID = "670371480965-2t7c91c3pk9e36rbojm91q9n936aulua.apps.googleusercontent.com";
 let fbSending = false;
 const fb = { type: "Idea", msg: "", name: "" };
 function fbText(){
