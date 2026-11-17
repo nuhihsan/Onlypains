@@ -15,11 +15,14 @@
 //   POST /auth/logout     Bearer token
 //   POST /auth/password   Bearer token, { old, new }   (old can be empty if the account has no password yet)
 //   POST /auth/google     { credential } -> { token, username }; with a Bearer token it links Google to that account
+//   POST /auth/google-redirect   form post from Google's own sign-in page (no popup, works on iPhone);
+//                                 sends the user back to the app with a one-time login in the address #fragment
 //   POST /sync            Bearer token, { since, changes: [{ path, data, t, del }] } -> { now, changes }
 //
 // Passwords are never stored: only a salted PBKDF2-SHA256 hash. Login tokens are stored as SHA-256 hashes.
 
 const ALLOWED_ORIGINS = ["https://nuhihsan.github.io"];
+const APP_URL = "https://nuhihsan.github.io/Onlypains/";
 const TYPES = ["Bug", "Idea", "Other"];
 const PBKDF2_ITER = 100000;           // the most Workers allow
 const MAX_DOC = 200000;               // bytes per synced document
@@ -52,6 +55,9 @@ export default {
       "Vary": "Origin"
     };
     const reply = (status, body) => new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
+    // Google's sign-in page posts here directly (from accounts.google.com), so it skips the app-origin check.
+    // Safe because the Google token itself is checked: signed by Google, made for our client id, not expired.
+    if (req.method === "POST" && new URL(req.url).pathname.replace(/\/+$/, "") === "/auth/google-redirect") return googleRedirect(req, env);
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
     if (req.method !== "POST" || !allowed) return reply(403, { ok: false, error: "not allowed" });
 
@@ -219,12 +225,30 @@ async function google(b, req, env, reply){
     await env.DB.prepare("UPDATE users SET google_sub = ?, email = ? WHERE id = ?").bind(g.sub, email, who.id).run();
     return reply(200, { ok: true, linked: true, username: who.username, google: email });
   }
-  if (owner) return reply(200, { ok: true, token: await newSession(owner.id, env), username: owner.username });
-  // new account: username from the email, made unique
+  const r = await googleAccount(g, env);
+  return reply(200, { ok: true, token: r.token, username: r.username, created: !!r.created });
+}
+
+async function googleRedirect(req, env){
+  const back = frag => Response.redirect(APP_URL + "#" + new URLSearchParams(frag).toString(), 303);
+  try {
+    if (!env.DB || !env.GOOGLE_CLIENT_ID) return back({ gerr: "Google sign-in isn't set up yet" });
+    const form = await req.formData();
+    const g = await verifyGoogle(form.get("credential"), env.GOOGLE_CLIENT_ID);
+    if (!g) return back({ gerr: "Google sign-in didn't go through. Try again." });
+    const r = await googleAccount(g, env);
+    return back({ gtoken: r.token, guser: r.username, gnew: r.created ? "1" : "0" });
+  } catch (e) { return back({ gerr: "Google sign-in didn't go through. Try again." }); }
+}
+// find the account for this Google user, or make one
+async function googleAccount(g, env){
+  const email = String(g.email || "").toLowerCase().slice(0, 200);
+  const owner = await env.DB.prepare("SELECT id, username FROM users WHERE google_sub = ?").bind(g.sub).first();
+  if (owner) return { token: await newSession(owner.id, env), username: owner.username };
   let base = (email.split("@")[0] || "user").toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 16);
   if (base.length < 3) base = (base + "user").slice(0, 16);
   let u = base;
   for (let i = 0; i < 50 && await env.DB.prepare("SELECT 1 FROM users WHERE username = ?").bind(u).first(); i++) u = base + Math.floor(10 + Math.random() * 990);
   const r = await env.DB.prepare("INSERT INTO users (username, pass_hash, salt, created, google_sub, email) VALUES (?, '', '', ?, ?, ?)").bind(u, Date.now(), g.sub, email).run();
-  return reply(200, { ok: true, token: await newSession(r.meta.last_row_id, env), username: u, created: true });
+  return { token: await newSession(r.meta.last_row_id, env), username: u, created: true };
 }
