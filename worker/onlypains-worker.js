@@ -22,6 +22,9 @@
 //   POST /group/...       Bearer token. Create, join, view and leave groups
 //   POST /social/notifs   Bearer token. Your notifications (friend requests, accepted, declined, group joins)
 //   POST /push/...        Bearer token. Phone notifications: key, subscribe, unsubscribe
+//   POST /social/5ha      Bearer token. Give or take back a 5Ha! (kudos) on a friend's workout, run or achievement
+//   POST /social/avatar   Bearer token. Set or remove your profile photo
+//   GET  /a/<key>         A profile photo. The key is random and only handed to friends and group-mates
 //
 // Passwords are never stored: only a salted PBKDF2-SHA256 hash. Login tokens are stored as SHA-256 hashes.
 
@@ -63,6 +66,7 @@ export default {
     // Safe because the Google token itself is checked: signed by Google, made for our client id, not expired.
     if (req.method === "POST" && new URL(req.url).pathname.replace(/\/+$/, "") === "/auth/google-redirect") return googleRedirect(req, env);
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
+    if (req.method === "GET" && /^\/a\/[a-f0-9]{32}$/.test(new URL(req.url).pathname)) return avatarImage(new URL(req.url).pathname.slice(3), env);
     if (req.method !== "POST" || !allowed) return reply(403, { ok: false, error: "not allowed" });
 
     const path = new URL(req.url).pathname.replace(/\/+$/, "") || "/";
@@ -284,7 +288,9 @@ async function ensureSocial(env){
     env.DB.prepare("CREATE INDEX IF NOT EXISTS notifs_user ON notifs(user_id, id)"),
     env.DB.prepare("CREATE TABLE IF NOT EXISTS push_subs (endpoint TEXT PRIMARY KEY, user_id INTEGER NOT NULL, p256dh TEXT NOT NULL, auth TEXT NOT NULL, created INTEGER NOT NULL)"),
     env.DB.prepare("CREATE INDEX IF NOT EXISTS push_subs_user ON push_subs(user_id)"),
-    env.DB.prepare("CREATE TABLE IF NOT EXISTS app_kv (k TEXT PRIMARY KEY, v TEXT NOT NULL)")
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS app_kv (k TEXT PRIMARY KEY, v TEXT NOT NULL)"),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS kudos (owner_id INTEGER NOT NULL, item TEXT NOT NULL, giver_id INTEGER NOT NULL, created INTEGER NOT NULL, PRIMARY KEY (owner_id, item, giver_id))"),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS avatars (user_id INTEGER PRIMARY KEY, k TEXT NOT NULL UNIQUE, data TEXT NOT NULL, updated INTEGER NOT NULL)")
   ]);
   socialReady = true;
 }
@@ -329,7 +335,7 @@ async function summariesOf(ids, env){
   const out = [];
   for (let i = 0; i < ids.length; i += 90) {
     const part = ids.slice(i, i + 90);
-    const r = await env.DB.prepare(`SELECT u.id, u.username, s.summary, s.share FROM users u LEFT JOIN social s ON s.user_id = u.id WHERE u.id IN (${part.map(() => "?").join(",")})`).bind(...part).all();
+    const r = await env.DB.prepare(`SELECT u.id, u.username, s.summary, s.share, a.k AS av FROM users u LEFT JOIN social s ON s.user_id = u.id LEFT JOIN avatars a ON a.user_id = u.id WHERE u.id IN (${part.map(() => "?").join(",")})`).bind(...part).all();
     out.push(...(r.results || []));
   }
   return out;
@@ -343,15 +349,16 @@ async function social(path, b, who, env, reply, ctx){
 
   if (path === "/social/me") {
     const mine = await mySocial(me, env);
-    const [fr, inc, out, gr, un] = await Promise.all([
-      env.DB.prepare("SELECT u.username, s.pub FROM friends f JOIN users u ON u.id = f.b LEFT JOIN social s ON s.user_id = f.b WHERE f.a = ? ORDER BY u.username").bind(me).all(),
+    const [fr, inc, out, gr, un, av] = await Promise.all([
+      env.DB.prepare("SELECT u.username, s.pub, a.k AS av FROM friends f JOIN users u ON u.id = f.b LEFT JOIN social s ON s.user_id = f.b LEFT JOIN avatars a ON a.user_id = f.b WHERE f.a = ? ORDER BY u.username").bind(me).all(),
       env.DB.prepare("SELECT u.username FROM friend_reqs r JOIN users u ON u.id = r.from_id WHERE r.to_id = ? ORDER BY r.created DESC").bind(me).all(),
       env.DB.prepare("SELECT u.username FROM friend_reqs r JOIN users u ON u.id = r.to_id WHERE r.from_id = ? ORDER BY r.created DESC").bind(me).all(),
       env.DB.prepare("SELECT g.id, g.name, g.code, g.owner, (SELECT COUNT(*) FROM grp_members x WHERE x.grp_id = g.id) AS n FROM grp_members m JOIN grp g ON g.id = m.grp_id WHERE m.user_id = ? ORDER BY g.name").bind(me).all(),
-      env.DB.prepare("SELECT COUNT(*) AS n FROM notifs WHERE user_id = ? AND read = 0").bind(me).first()
+      env.DB.prepare("SELECT COUNT(*) AS n FROM notifs WHERE user_id = ? AND read = 0").bind(me).first(),
+      env.DB.prepare("SELECT k FROM avatars WHERE user_id = ?").bind(me).first()
     ]);
-    return reply(200, { ok: true, username: who.username, code: mine.code, share: mine.share, unread: un ? un.n : 0,
-      friends: (fr.results || []).map(r => ({ username: r.username, active: r.pub || 0 })),
+    return reply(200, { ok: true, username: who.username, code: mine.code, share: mine.share, unread: un ? un.n : 0, avatar: av ? av.k : null,
+      friends: (fr.results || []).map(r => ({ username: r.username, active: r.pub || 0, avatar: r.av || null })),
       incoming: (inc.results || []).map(r => r.username), outgoing: (out.results || []).map(r => r.username),
       groups: (gr.results || []).map(g => ({ id: g.id, name: g.name, code: g.code, owner: g.owner === me, members: g.n })) });
   }
@@ -413,37 +420,74 @@ async function social(path, b, who, env, reply, ctx){
   if (path === "/social/profile") {
     const u = await userByName(b.username, env);
     if (!u || !(await canSee(me, u.id, env))) return reply(404, { ok: false, error: "You can only see friends and people in your groups." });
-    const row = await env.DB.prepare("SELECT summary, share FROM social WHERE user_id = ?").bind(u.id).first();
+    const row = await env.DB.prepare("SELECT s.summary, s.share, a.k AS av FROM social s LEFT JOIN avatars a ON a.user_id = s.user_id WHERE s.user_id = ?").bind(u.id).first();
     const friend = !!(await env.DB.prepare("SELECT 1 FROM friends WHERE a = ? AND b = ?").bind(me, u.id).first());
-    return reply(200, { ok: true, username: u.username, self: u.id === me, friend, summary: row ? visible(row.summary, row.share, u.id === me) : null });
+    return reply(200, { ok: true, username: u.username, self: u.id === me, friend, avatar: row ? row.av || null : null, summary: row ? visible(row.summary, row.share, u.id === me) : null });
   }
 
   if (path === "/social/feed") {
     const ids = [me, ...(await circle(me, env))].slice(0, 500);
     const cutoff = String(b.from || "").match(/^\d{4}-\d{2}-\d{2}$/) ? b.from : "0000";
-    const items = [];
+    const items = [], idOf = {};
     for (const r of await summariesOf(ids, env)) {
       const s = visible(r.summary, r.share, r.id === me);
       if (!s) continue;
-      for (const w of (s.lifts && s.lifts.recent) || []) if (w && w.date >= cutoff) items.push(Object.assign({ kind: "lift", user: r.username, self: r.id === me }, w));
-      for (const w of (s.runs && s.runs.recent) || []) if (w && w.date >= cutoff) items.push(Object.assign({ kind: "run", user: r.username, self: r.id === me }, w));
+      idOf[r.username] = r.id;
+      const base = { user: r.username, self: r.id === me, avatar: r.av || null };
+      for (const w of (s.lifts && s.lifts.recent) || []) if (w && w.date >= cutoff) items.push(Object.assign({ kind: "lift" }, base, w, { key: w.sid ? "l:" + w.sid : null }));
+      for (const w of (s.runs && s.runs.recent) || []) if (w && w.date >= cutoff) items.push(Object.assign({ kind: "run" }, base, w, { key: w.rid ? "r:" + w.rid : null }));
+      for (const a of [...((s.lifts && s.lifts.ach) || []), ...((s.runs && s.runs.ach) || [])]) if (a && a.date >= cutoff) items.push(Object.assign({ kind: "ach" }, base, a, { key: "a:" + a.id, ts: 0 }));
     }
     items.sort((x, y) => String(y.date).localeCompare(String(x.date)) || (y.ts || 0) - (x.ts || 0));
-    return reply(200, { ok: true, items: items.slice(0, 80) });
+    const top = items.slice(0, 80);
+    // 5Ha! counts, who gave them, and whether you did
+    const owners = [...new Set(top.map(i => idOf[i.user]))], k5 = {};
+    for (let i = 0; i < owners.length; i += 90) {
+      const part = owners.slice(i, i + 90);
+      const r = await env.DB.prepare(`SELECT k.owner_id, k.item, k.giver_id, u.username FROM kudos k JOIN users u ON u.id = k.giver_id WHERE k.owner_id IN (${part.map(() => "?").join(",")}) ORDER BY k.created`).bind(...part).all();
+      for (const x of r.results || []) (k5[x.owner_id + "|" + x.item] ||= []).push(x);
+    }
+    for (const it of top) {
+      const l = it.key ? k5[idOf[it.user] + "|" + it.key] || [] : [];
+      it.fha = { n: l.length, mine: l.some(x => x.giver_id === me), names: l.map(x => x.giver_id === me ? "You" : x.username).slice(-4) };
+    }
+    return reply(200, { ok: true, items: top });
   }
 
   if (path === "/social/notifs") {
     await env.DB.prepare("DELETE FROM notifs WHERE user_id = ? AND created < ?").bind(me, now - 30 * 86400000).run();
     const r = await env.DB.prepare(
-      `SELECT n.id, n.kind, n.actor, n.grp_id, n.grp_name, n.created, n.read,
+      `SELECT n.id, n.kind, n.actor, n.grp_id, n.grp_name, n.created, n.read, (SELECT a.k FROM avatars a JOIN users u ON u.id = a.user_id WHERE u.username = n.actor) AS av,
          CASE WHEN n.kind = 'req' THEN EXISTS (SELECT 1 FROM friend_reqs q JOIN users u ON u.id = q.from_id WHERE q.to_id = n.user_id AND u.username = n.actor) ELSE 0 END AS pending
        FROM notifs n WHERE n.user_id = ? ORDER BY n.id DESC LIMIT 50`).bind(me).all();
-    const list = (r.results || []).map(n => ({ id: n.id, kind: n.kind, actor: n.actor, group: n.grp_id ? { id: n.grp_id, name: n.grp_name } : null, at: n.created, read: !!n.read, pending: !!n.pending }));
+    const list = (r.results || []).map(n => ({ id: n.id, kind: n.kind, actor: n.actor, avatar: n.av || null, group: n.grp_id ? { id: n.grp_id, name: n.grp_name } : null, label: n.kind === "5ha" ? n.grp_name : null, at: n.created, read: !!n.read, pending: !!n.pending }));
     return reply(200, { ok: true, items: list, unread: list.filter(n => !n.read).length });
   }
   if (path === "/social/notifs-read") {
     await env.DB.prepare("UPDATE notifs SET read = 1 WHERE user_id = ? AND read = 0").bind(me).run();
     return reply(200, { ok: true });
+  }
+  if (path === "/social/5ha") {
+    const u = await userByName(b.user, env), item = String(b.item || "");
+    if (!u || !/^[lra]:[A-Za-z0-9_:.\-]{1,60}$/.test(item)) return bad("Can't find that.");
+    if (u.id === me) return bad("You can't give yourself a 5Ha!");
+    if (!(await canSee(me, u.id, env))) return reply(404, { ok: false, error: "You can only give a 5Ha! to friends and people in your groups." });
+    if (b.on) {
+      const ins = await env.DB.prepare("INSERT OR IGNORE INTO kudos (owner_id, item, giver_id, created) VALUES (?, ?, ?, ?)").bind(u.id, item, me, now).run();
+      const label = String(b.label || "").slice(0, 60);
+      const seen = await env.DB.prepare("SELECT 1 FROM notifs WHERE user_id = ? AND kind = '5ha' AND actor = ? AND grp_name IS ? AND created > ?").bind(u.id, who.username, label || null, now - 86400000).first();
+      if (ins.meta && ins.meta.changes && !seen) await notify(env, ctx, [u.id], "5ha", { actor: who.username, label }); // once a day per item, however many taps
+    } else await env.DB.prepare("DELETE FROM kudos WHERE owner_id = ? AND item = ? AND giver_id = ?").bind(u.id, item, me).run();
+    const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM kudos WHERE owner_id = ? AND item = ?").bind(u.id, item).first();
+    return reply(200, { ok: true, n: n ? n.n : 0, mine: !!b.on });
+  }
+  if (path === "/social/avatar") {
+    if (b.remove) { await env.DB.prepare("DELETE FROM avatars WHERE user_id = ?").bind(me).run(); return reply(200, { ok: true, avatar: null }); }
+    const m = String(b.data || "").match(/^data:image\/(jpeg|webp|png);base64,([A-Za-z0-9+\/=]+)$/);
+    if (!m || m[2].length > 80000) return bad("That photo didn't work. Try another one.");
+    const k = randHex(16);
+    await env.DB.prepare("INSERT INTO avatars (user_id, k, data, updated) VALUES (?, ?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET k = excluded.k, data = excluded.data, updated = excluded.updated").bind(me, k, b.data, now).run();
+    return reply(200, { ok: true, avatar: k });
   }
   if (path === "/push/key") return reply(200, { ok: true, key: (await vapidKeys(env)).pub });
   if (path === "/push/subscribe") {
@@ -499,11 +543,11 @@ async function social(path, b, who, env, reply, ctx){
   const isOwner = g.owner === me;
 
   if (path === "/group/view") {
-    const r = await env.DB.prepare("SELECT u.id, u.username, s.summary, s.share, m.joined FROM grp_members m JOIN users u ON u.id = m.user_id LEFT JOIN social s ON s.user_id = u.id WHERE m.grp_id = ? ORDER BY m.joined").bind(g.id).all();
+    const r = await env.DB.prepare("SELECT u.id, u.username, s.summary, s.share, m.joined, a.k AS av FROM grp_members m JOIN users u ON u.id = m.user_id LEFT JOIN social s ON s.user_id = u.id LEFT JOIN avatars a ON a.user_id = u.id WHERE m.grp_id = ? ORDER BY m.joined").bind(g.id).all();
     const week = String(b.week || "");
     const members = (r.results || []).map(x => {
       const s = visible(x.summary, x.share, x.id === me);
-      return { username: x.username, self: x.id === me, owner: x.id === g.owner, published: !!s,
+      return { username: x.username, self: x.id === me, owner: x.id === g.owner, published: !!s, avatar: x.av || null,
         week: s && s.weeks[week] || null, streak: s && s.streak ? s.streak.cur : null, share: s ? s.share : null };
     });
     return reply(200, { ok: true, id: g.id, name: g.name, code: g.code, owner: isOwner, members });
@@ -556,13 +600,14 @@ function notifText(kind, d){
   if (kind === "accepted") return `${d.actor} accepted your friend request`;
   if (kind === "declined") return `${d.actor} declined your friend request`;
   if (kind === "joined") return `${d.actor} joined ${d.grpName}`;
+  if (kind === "5ha") return `${d.actor} gave you 5Ha!${d.label ? " for " + d.label : ""}`;
   if (kind === "test") return "Notifications are on. You'll hear about friend requests and group joins here.";
   return "Something new on OnlyPains";
 }
 async function notify(env, ctx, userIds, kind, d){
   if (!userIds.length) return;
   const now = Date.now();
-  if (kind !== "test") await env.DB.batch(userIds.map(u => env.DB.prepare("INSERT INTO notifs (user_id, kind, actor, grp_id, grp_name, created) VALUES (?, ?, ?, ?, ?, ?)").bind(u, kind, d.actor || null, d.grpId || null, d.grpName || null, now)));
+  if (kind !== "test") await env.DB.batch(userIds.map(u => env.DB.prepare("INSERT INTO notifs (user_id, kind, actor, grp_id, grp_name, created) VALUES (?, ?, ?, ?, ?, ?)").bind(u, kind, d.actor || null, d.grpId || null, d.grpName || d.label || null, now)));
   const msg = { title: "OnlyPains", body: notifText(kind, d), url: APP_URL + "#notifs", tag: `${kind}-${d.actor || ""}-${d.grpId || ""}` };
   const p = pushTo(env, userIds, msg).catch(() => {});
   if (ctx && ctx.waitUntil) ctx.waitUntil(p); else await p;
@@ -630,4 +675,17 @@ async function sendPush(vapid, sub, msg){
   return fetch(sub.endpoint, { method: "POST", body: cat(head, ct), headers: {
     "Content-Encoding": "aes128gcm", "Content-Type": "application/octet-stream", "TTL": "86400", "Urgency": "normal",
     "Authorization": `vapid t=${await vapidJwt(vapid, new URL(sub.endpoint).origin)}, k=${vapid.pub}` } });
+}
+
+// ---------- Profile photos ----------
+// Shrunk to 256 px on the phone before upload. Served by a random key that changes with every new photo,
+// so it can be cached for good and only people who were handed the key (friends, group-mates) can load it.
+async function avatarImage(k, env){
+  if (!env.DB) return new Response("", { status: 404 });
+  let row = null;
+  try { row = await env.DB.prepare("SELECT data FROM avatars WHERE k = ?").bind(k).first(); } catch (e) {}
+  const m = row && String(row.data).match(/^data:(image\/[a-z]+);base64,(.+)$/);
+  if (!m) return new Response("", { status: 404 });
+  return new Response(b64u(m[2].replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")), { headers: {
+    "Content-Type": m[1], "Cache-Control": "public, max-age=31536000, immutable", "X-Content-Type-Options": "nosniff", "Access-Control-Allow-Origin": "*" } });
 }

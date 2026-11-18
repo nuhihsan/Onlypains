@@ -227,6 +227,12 @@ details summary{cursor:pointer;min-height:32px;display:flex;align-items:center}
 @media (max-width:430px){ .wk-lbl{display:none} header .icon-btn{padding:6px 5px} }
 #bellBtn .badge{position:absolute;top:2px;right:0;min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:var(--warn);color:#fff;font-size:11px;font-weight:800;line-height:17px;text-align:center}
 .feed-item.unread{border-color:var(--accent);background:var(--accent-soft)}
+.av{border-radius:50%;object-fit:cover;flex:none;display:inline-flex;align-items:center;justify-content:center;background:var(--accent);color:var(--accent-ink);font-weight:800}
+.fha{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:6px 12px;min-height:36px;font-weight:700;font-size:14px;cursor:pointer;font-variant-numeric:tabular-nums}
+span.fha{cursor:default}
+.fha.on{background:var(--warn-bg);border-color:var(--warn);color:var(--warn)}
+.feed-item.ach .ach-name{font-size:18px;font-weight:700}
+.code-row{gap:8px}.code-row input{min-width:0}.code-row .btn{flex:none;white-space:nowrap;padding-left:12px;padding-right:12px}
 .avatar{width:36px;height:36px;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:inline-flex;align-items:center;justify-content:center;font-weight:800;flex:none}
 #friendsBtn .dot{position:absolute;top:6px;right:5px;width:9px;height:9px;border-radius:50%;background:var(--warn)}
 </style>
@@ -1450,7 +1456,7 @@ function buildPublic(){
     if(pr.length) prs.set(s.id, pr.slice(0, 3)); }
   const recent = dated.slice().sort((a, b) => b.date.localeCompare(a.date) || (b.ts || 0) - (a.ts || 0)).slice(0, 12).map(s => {
     const tops = (s.entries || []).map(e => ({ e, t: topSet(e) })).filter(x => x.t).sort((a, b) => e1rm(num(b.t.kg), num(b.t.reps)) - e1rm(num(a.t.kg), num(a.t.reps)));
-    return { date: s.date, ts: s.ts || 0, name: String(s.splitName || s.split || "Workout").slice(0, 40), ex: (s.entries || []).length,
+    return { sid: String(s.id || "").slice(0, 40), date: s.date, ts: s.ts || 0, name: String(s.splitName || s.split || "Workout").slice(0, 40), ex: (s.entries || []).length,
       sets: (s.entries || []).reduce((a, e) => a + e.sets.length, 0), vol: Math.round(vol(s)),
       top: tops.slice(0, 2).map(x => ({ name: x.e.name.slice(0, 40), kg: num(x.t.kg), reps: num(x.t.reps) })), prs: prs.get(s.id) || [] }; });
   const weeks = {}, thisW = mondayStr();
@@ -1460,9 +1466,28 @@ function buildPublic(){
   const st = streaks(), wm = measures.find(m => m.weight > 0);
   return { v: 1, streak: { cur: st.cur, best: st.best, thisWeek: st.thisWeek, min: cfg.weekMin },
     totals: { sessions: sessions.length, volume: Math.round(totalVolume(sessions)), runKm: Math.round(sumKm(runs) * 10) / 10 },
-    lifts: { recent, best: [...best.values()].sort((a, b) => b.v - a.v).slice(0, 12).map(b => ({ name: b.name, kg: b.kg, reps: b.reps, date: b.date })) },
-    runs: { recent: runs.slice(0, 10).map(r => ({ date: r.date, ts: r.startTs || 0, km: r.distanceKm, sec: r.durationSec, hr: r.avgHr || null, name: String(r.name || "").slice(0, 40) })) },
+    lifts: { ach: achDates().filter(a => a.group !== "Distance run"), recent, best: [...best.values()].sort((a, b) => b.v - a.v).slice(0, 12).map(b => ({ name: b.name, kg: b.kg, reps: b.reps, date: b.date })) },
+    runs: { ach: achDates().filter(a => a.group === "Distance run"), recent: runs.slice(0, 10).map(r => ({ rid: String(r.id || "").slice(0, 40), date: r.date, ts: r.startTs || 0, km: r.distanceKm, sec: r.durationSec, hr: r.avgHr || null, name: String(r.name || "").slice(0, 40) })) },
     body: wm ? { weight: wm.weight, date: wm.date } : null, weeks };
+}
+// when each milestone was reached, so it can show up in friends' feeds (newest 10 per kind)
+function achDates(){
+  const out = [], add = (g, n, date) => { if(date) out.push({ id: g.group + ":" + n, group: g.group, name: g.name(n), date }); };
+  const M = Object.fromEntries(MILESTONES.map(g => [g.group, g]));
+  const ss = sessions.filter(s => s.date).slice().sort((a, b) => a.date.localeCompare(b.date) || (a.ts || 0) - (b.ts || 0));
+  let vol = 0; const sv = M["Sessions"], tv = M["Total lifted"];
+  ss.forEach((s, i) => { const before = vol; vol += totalVolume([s]);
+    for(const n of sv.list) if(i + 1 === n) add(sv, n, s.date);
+    for(const n of tv.list) if(before < n && vol >= n) add(tv, n, s.date); });
+  const wv = M["Week streak"];
+  if(ss.length){ const wc = weekCounts(ss), last = new Map(); for(const s of ss) last.set(mondayOf(s.date), s.date);
+    let run = 0; for(let w = mondayOf(ss[0].date), end = mondayStr(); w <= end; w = addDays(w, 7)){
+      if((wc.get(w) || 0) >= cfg.weekMin){ run++; for(const n of wv.list) if(run === n) add(wv, n, last.get(w)); } else if(w !== end) run = 0; } }
+  const dv = M["Distance run"]; let km = 0;
+  for(const r of runs.filter(r => r.date).slice().sort((a, b) => a.date.localeCompare(b.date) || (a.startTs || 0) - (b.startTs || 0))){
+    const before = km; km += num(r.distanceKm); for(const n of dv.list) if(before < n && km >= n) add(dv, n, r.date); }
+  const byGroup = g => out.filter(a => g ? a.group === "Distance run" : a.group !== "Distance run").sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10);
+  return [...byGroup(false), ...byGroup(true)];
 }
 function publishSoon(ms){ clearTimeout(pubTimer); pubTimer = setTimeout(publishNow, ms == null ? 3000 : ms); }
 async function publishNow(){
@@ -1528,15 +1553,32 @@ function socSeg(){
   return `<div class="seg" role="group" aria-label="Friends views">${[["feed","Feed"],["friends","Friends"],["groups","Groups"]].map(([k,l]) => `<button class="${socTab === k ? "on" : ""}" data-action="soc-tab" data-t="${k}" aria-pressed="${socTab === k}">${l}${k === "friends" && soc && soc.incoming.length ? ` (${soc.incoming.length})` : ""}</button>`).join("")}</div>`;
 }
 const userBtn = u => `<button class="link-btn" data-action="soc-user" data-u="${esc(u)}">${esc(u)}</button>`;
+function avatarHtml(user, key, size){
+  size = size || 32;
+  const st = `width:${size}px;height:${size}px;font-size:${Math.round(size * 0.42)}px`;
+  return key && /^[a-f0-9]{32}$/.test(key) ? `<img class="av" src="${WORKER_URL}/a/${key}" alt="" width="${size}" height="${size}" style="${st}" loading="lazy">`
+    : `<span class="av" style="${st}" aria-hidden="true">${esc(String(user || "?").slice(0, 1).toUpperCase())}</span>`;
+}
+const fhaLabel = it => it.kind === "ach" ? it.name : it.kind === "run" ? `your ${kg(it.km)} km run` : `your ${it.name} workout`;
+function fhaHtml(it){
+  if(!it.key || !it.fha) return "";
+  const f = it.fha, names = f.names && f.names.length ? `<small class="muted">${esc(f.names.join(", "))}${f.n > f.names.length ? ` and ${f.n - f.names.length} more` : ""} gave 5Ha!</small>` : "";
+  if(it.self) return f.n ? `<div class="row" style="flex-wrap:wrap;gap:8px"><span class="fha on" aria-label="${f.n} 5Ha!">✋ 5Ha! · ${f.n}</span>${names}</div>` : "";
+  return `<div class="row" style="flex-wrap:wrap;gap:8px"><button class="fha ${f.mine ? "on" : ""}" data-action="soc-5ha" data-u="${esc(it.user)}" data-i="${esc(it.key)}" aria-pressed="${f.mine}">✋ 5Ha!${f.n ? ` · ${f.n}` : ""}</button>${names}</div>`;
+}
 const liftTxt = x => `${esc(x.name)} ${kg(x.kg)} kg x ${esc(x.reps)}`;
-function feedItemHtml(it){
+// plain: inside someone's profile, so no name line and no 5Ha!
+function feedItemHtml(it, plain){
   const who = it.self ? `<b>You</b>` : userBtn(it.user), when = it.date === todayStr() ? "today" : esc(fmtDate(it.date));
-  if(it.kind === "run") return `<li class="feed-item"><div class="row between"><span>${who} ran</span><small class="muted">${when}</small></div>
-    <div><b>${kg(it.km)} km</b> · ${fmtDur(it.sec)} · ${fmtPace(it.sec / it.km)} /km${it.hr ? ` · HR ${esc(it.hr)}` : ""}</div>${it.name ? `<small class="muted">${esc(it.name)}</small>` : ""}</li>`;
-  return `<li class="feed-item"><div class="row between"><span>${who} trained ${esc(it.name)}</span><small class="muted">${when}</small></div>
+  const head = txt => plain ? `<div class="row between"><span>${txt}</span><small class="muted">${when}</small></div>`
+    : `<div class="row between"><span class="row" style="gap:8px">${avatarHtml(it.user, it.self && soc ? soc.avatar : it.avatar, 30)}<span>${who} ${txt}</span></span><small class="muted">${when}</small></div>`;
+  if(it.kind === "ach") return `<li class="feed-item ach">${head(`unlocked a milestone`)}<div class="ach-name">🏅 ${esc(it.name)}</div>${plain ? "" : fhaHtml(it)}</li>`;
+  if(it.kind === "run") return `<li class="feed-item">${head(plain ? `<b>${kg(it.km)} km</b>` : "ran")}
+    <div>${plain ? "" : `<b>${kg(it.km)} km</b> · `}${fmtDur(it.sec)} · ${fmtPace(it.sec / it.km)} /km${it.hr ? ` · HR ${esc(it.hr)}` : ""}</div>${it.name ? `<small class="muted">${esc(it.name)}</small>` : ""}${plain ? "" : fhaHtml(it)}</li>`;
+  return `<li class="feed-item">${head(plain ? `<b>${esc(it.name)}</b>` : `trained ${esc(it.name)}`)}
     <div class="muted">${esc(it.ex)} exercises · ${esc(it.sets)} sets · ${Math.round(num(it.vol)).toLocaleString()} kg</div>
     ${(it.top || []).length ? `<small>Top: ${it.top.map(liftTxt).join(", ")}</small>` : ""}
-    ${(it.prs || []).length ? `<div class="chips">${it.prs.map(p => `<span class="chip good">PR ${liftTxt(p)}</span>`).join("")}</div>` : ""}</li>`;
+    ${(it.prs || []).length ? `<div class="chips">${it.prs.map(p => `<span class="chip good">PR ${liftTxt(p)}</span>`).join("")}</div>` : ""}${plain ? "" : fhaHtml(it)}</li>`;
 }
 function renderFriends(){
   if(!WORKER_URL || storageMode !== "local") return `<section class="card"><h2>Friends</h2><p class="muted">Friends and groups work in the online version of OnlyPains.</p></section>`;
@@ -1554,21 +1596,26 @@ function renderFriends(){
   let body = "";
   if(socTab === "feed"){
     body = `<section class="card"><div class="row between"><h2>Feed</h2><button class="btn small" data-action="soc-refresh">${socBusy ? "Loading…" : "Refresh"}</button></div>
-      ${socFeed && socFeed.length ? `<ul class="feed">${socFeed.map(feedItemHtml).join("")}</ul><p class="muted">Last 3 weeks of workouts and runs from you, your friends and your groups.</p>`
+      ${socFeed && socFeed.length ? `<ul class="feed">${socFeed.map(it => feedItemHtml(it)).join("")}</ul><p class="muted">Last 3 weeks of workouts and runs from you, your friends and your groups.</p>`
         : `<p class="muted">Nothing here yet. Add friends or join a group, and their workouts and runs show up here.</p><button class="btn" data-action="soc-tab" data-t="friends">Add a friend</button>`}</section>`;
   } else if(socTab === "friends"){
     const sh = soc.share || {};
     body = `${soc.incoming.length ? `<section class="card"><h2>Friend requests</h2><ul class="ex-list">${soc.incoming.map(u => `<li><span>${esc(u)}</span>
         <button class="btn small primary" data-action="soc-accept" data-u="${esc(u)}">Accept</button><button class="icon-btn" data-action="soc-decline" data-u="${esc(u)}" aria-label="Decline ${esc(u)}">Decline</button></li>`).join("")}</ul></section>` : ""}
+      <section class="card"><h2>Your profile</h2>
+        <div class="row" style="gap:14px">${avatarHtml(soc.username, soc.avatar, 64)}<div style="display:flex;flex-direction:column;gap:6px;min-width:0"><b>${esc(soc.username)}</b>
+          <div class="row" style="flex-wrap:wrap;gap:8px"><label class="btn small" for="av-file" style="cursor:pointer">${soc.avatar ? "Change photo" : "Add a photo"}</label>${soc.avatar ? `<button class="btn small" data-action="soc-av-rm">Remove</button>` : ""}</div></div></div>
+        <input type="file" id="av-file" accept="image/*" hidden>
+        <p class="muted" style="margin:0">Your friends and group-mates see your photo next to your name. <button class="link-btn" data-action="soc-user" data-u="${esc(soc.username)}">See your profile</button></p></section>
       <section class="card"><h2>Your friend code</h2>
         <div class="code-box">${esc(soc.code)}</div>
         <div class="row" style="flex-wrap:wrap"><button class="btn primary" data-action="soc-invite">Send invite link</button><button class="btn" data-action="soc-copy" data-c="${esc(soc.code)}">Copy code</button></div>
         <p class="muted">Friends tap your link or type your code. You'll both see each other once they're added.</p></section>
       <section class="card"><h2>Add a friend</h2>
-        <div class="row"><input id="soc-code" class="mini" style="flex:1;width:auto;text-transform:uppercase" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="12" placeholder="Their 8-letter code">${canPaste() ? `<button class="btn" data-action="soc-paste" data-for="soc-code">Paste</button>` : ""}<button class="btn primary" data-action="soc-add">Add</button></div>
+        <div class="row code-row"><input id="soc-code" class="mini" style="flex:1;width:auto;text-transform:uppercase" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="12" placeholder="Their 8-letter code">${canPaste() ? `<button class="btn" data-action="soc-paste" data-for="soc-code">Paste</button>` : ""}<button class="btn primary" data-action="soc-add">Add</button></div>
         <p class="muted" style="margin:0">You can paste their whole invite message. The code is picked out for you.</p></section>
       <section class="card"><h2>Friends (${soc.friends.length})</h2>
-        ${soc.friends.length ? `<ul class="ex-list">${soc.friends.map(f => `<li><span>${userBtn(f.username)}<br><small class="muted">${f.active ? "Updated " + ago(f.active) : "Hasn't synced the new version yet"}</small></span>
+        ${soc.friends.length ? `<ul class="ex-list">${soc.friends.map(f => `<li>${avatarHtml(f.username, f.avatar, 36)}<span>${userBtn(f.username)}<br><small class="muted">${f.active ? "Updated " + ago(f.active) : "Hasn't synced the new version yet"}</small></span>
           <button class="icon-btn" data-action="soc-unfriend" data-u="${esc(f.username)}" aria-label="Remove ${esc(f.username)}">✕</button></li>`).join("")}</ul>` : `<p class="muted">No friends yet. Send your invite link to get started.</p>`}
         ${soc.outgoing.length ? `<p class="muted" style="margin:0">Waiting for them to accept:</p><ul class="ex-list">${soc.outgoing.map(u => `<li><span>${esc(u)}</span><button class="icon-btn" data-action="soc-cancel" data-u="${esc(u)}">Cancel</button></li>`).join("")}</ul>` : ""}</section>
       <section class="card"><h2>What friends can see</h2>
@@ -1581,12 +1628,30 @@ function renderFriends(){
         ${soc.groups.length ? `<ul class="ex-list">${soc.groups.map(g => `<li><span><button class="link-btn" data-action="soc-group" data-id="${g.id}">${esc(g.name)}</button><br><small class="muted">${g.members} member${g.members === 1 ? "" : "s"}${g.owner ? " · you own it" : ""}</small></span>
           <button class="btn small" data-action="soc-group" data-id="${g.id}">Open</button></li>`).join("")}</ul>` : `<p class="muted">You're not in any groups yet. Make one for your gym crew, or join with a code.</p>`}</section>
       <section class="card"><h2>Join a group</h2>
-        <div class="row"><input id="grp-code" class="mini" style="flex:1;width:auto;text-transform:uppercase" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="12" placeholder="Group code">${canPaste() ? `<button class="btn" data-action="soc-paste" data-for="grp-code">Paste</button>` : ""}<button class="btn primary" data-action="grp-join">Join</button></div></section>
+        <div class="row code-row"><input id="grp-code" class="mini" style="flex:1;width:auto;text-transform:uppercase" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="12" placeholder="Group code">${canPaste() ? `<button class="btn" data-action="soc-paste" data-for="grp-code">Paste</button>` : ""}<button class="btn primary" data-action="grp-join">Join</button></div></section>
       <section class="card"><h2>New group</h2>
-        <div class="row"><input id="grp-name" class="mini" style="flex:1;width:auto" maxlength="30" placeholder="e.g. Gym Bros"><button class="btn" data-action="grp-create">Create</button></div>
+        <div class="row code-row"><input id="grp-name" class="mini" style="flex:1;width:auto" maxlength="30" placeholder="e.g. Gym Bros"><button class="btn" data-action="grp-create">Create</button></div>
         <p class="muted">Everyone in a group sees each other's shared stats and a weekly leaderboard, even if they aren't friends.</p></section>`;
   }
   return socSeg() + body;
+}
+// profile photo: centre-crop to a 256 px square JPEG on the phone, then upload
+document.addEventListener("change", async ev => {
+  if(ev.target && ev.target.id === "av-file"){ const f = ev.target.files && ev.target.files[0]; ev.target.value = ""; if(f) uploadAvatar(f); }
+});
+async function uploadAvatar(file){
+  if(!/^image\//.test(file.type || "image/")) return toast("Pick a photo.");
+  toast("Uploading photo…");
+  try {
+    const url = URL.createObjectURL(file);
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+    const side = Math.min(img.naturalWidth, img.naturalHeight), c = document.createElement("canvas"); c.width = c.height = 256;
+    c.getContext("2d").drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, 256, 256);
+    URL.revokeObjectURL(url);
+    let data = c.toDataURL("image/jpeg", 0.85); if(data.length > 75000) data = c.toDataURL("image/jpeg", 0.6);
+    const r = await socDo("/social/avatar", { data }, "Photo updated");
+    if(r && soc){ soc.avatar = r.avatar; loadSoc(); render(); }
+  } catch(e){ toast("That photo didn't work. Try another one."); }
 }
 function renderSocProfile(){
   const back = `<button class="btn small" data-action="soc-back" style="align-self:flex-start">← Back</button>`;
@@ -1598,13 +1663,15 @@ function renderSocProfile(){
     st && [st.cur + "w", "streak"], st && [st.thisWeek, "this week"], s.totals.sessions != null && [s.totals.sessions, "workouts"],
     s.totals.runKm != null && [kg(s.totals.runKm), "km run"], wk.km != null && [kg(wk.km), "km this week"]].filter(Boolean);
   return `${back}
-    <section class="card"><div class="row between"><h2>${esc(p.username)}${p.self ? " (you)" : ""}</h2>${p.friend ? `<span class="chip good">Friend</span>` : p.self ? "" : `<span class="chip info">Group</span>`}</div>
+    <section class="card"><div class="row between"><span class="row" style="gap:10px">${avatarHtml(p.username, p.avatar, 56)}<h2>${esc(p.username)}${p.self ? " (you)" : ""}</h2></span>${p.friend ? `<span class="chip good">Friend</span>` : p.self ? "" : `<span class="chip info">Group</span>`}</div>
       ${tiles.length ? `<div class="soc-tiles">${tiles.map(([v, l]) => `<div><b>${esc(v)}</b><small class="muted">${l}</small></div>`).join("")}</div>` : ""}
       ${st ? `<p class="muted" style="margin:0">Best streak ${esc(st.best)} weeks · aims for ${esc(st.min)}+ sessions a week</p>` : ""}
       <small class="muted">Updated ${ago(s.at)}</small></section>
+    ${(() => { const A = [...((L && L.ach) || []), ...((R && R.ach) || [])].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8);
+      return A.length ? `<section class="card"><h2>Achievements</h2><div class="chips">${A.map(a => `<span class="chip good">🏅 ${esc(a.name)}</span>`).join("")}</div></section>` : ""; })()}
     ${L && L.best && L.best.length ? `<section class="card"><h2>Best lifts</h2><ul class="ex-list">${L.best.slice(0, 8).map(b => `<li><span>${esc(b.name)}</span><small class="muted" style="padding-right:10px">${kg(b.kg)} kg x ${esc(b.reps)}</small></li>`).join("")}</ul></section>` : ""}
-    ${L && L.recent && L.recent.length ? `<section class="card"><h2>Recent workouts</h2><ul class="feed">${L.recent.slice(0, 5).map(w => feedItemHtml(Object.assign({ kind: "lift", user: p.username, self: true }, w)).replace("<b>You</b> trained", "")).join("")}</ul></section>` : ""}
-    ${R && R.recent && R.recent.length ? `<section class="card"><h2>Recent runs</h2><ul class="feed">${R.recent.slice(0, 5).map(w => feedItemHtml(Object.assign({ kind: "run", user: p.username, self: true }, w)).replace("<b>You</b> ran", "Run")).join("")}</ul></section>` : ""}
+    ${L && L.recent && L.recent.length ? `<section class="card"><h2>Recent workouts</h2><ul class="feed">${L.recent.slice(0, 5).map(w => feedItemHtml(Object.assign({ kind: "lift", user: p.username }, w), true)).join("")}</ul></section>` : ""}
+    ${R && R.recent && R.recent.length ? `<section class="card"><h2>Recent runs</h2><ul class="feed">${R.recent.slice(0, 5).map(w => feedItemHtml(Object.assign({ kind: "run", user: p.username }, w), true)).join("")}</ul></section>` : ""}
     ${s.body && s.body.weight ? `<section class="card"><h2>Body weight</h2><p><b>${kg(s.body.weight)} kg</b> <span class="muted">· ${esc(fmtDate(s.body.date))}</span></p></section>` : ""}
     ${!L && !R && !p.self ? `<section class="card"><p class="muted">${esc(p.username)} isn't sharing workouts or runs right now.</p></section>` : ""}
     ${p.friend ? `<button class="btn danger" data-action="soc-unfriend" data-u="${esc(p.username)}">Remove friend</button>` : ""}`;
@@ -1623,7 +1690,7 @@ function renderSocGroup(){
     <section class="card"><h2>This week</h2>
       <div class="seg" role="group" aria-label="Leaderboard">${Object.entries(M).map(([k, [l]]) => `<button class="${groupMetric === k ? "on" : ""}" data-action="grp-metric" data-m="${k}" aria-pressed="${groupMetric === k}">${l}</button>`).join("")}</div>
       <ol class="board">${ranked.map(m => { const v = val(m); if(v != null) rank++;
-        return `<li class="${m.self ? "me" : ""}"><span class="rk">${v != null ? rank : "–"}</span><span class="nm">${m.self ? "<b>You</b>" : userBtn(m.username)}${m.owner ? ` <small class="muted">owner</small>` : ""}${m.streak ? `<br><small class="muted">${esc(m.streak)}-week streak</small>` : ""}</span>
+        return `<li class="${m.self ? "me" : ""}"><span class="rk">${v != null ? rank : "–"}</span>${avatarHtml(m.username, m.avatar, 32)}<span class="nm">${m.self ? "<b>You</b>" : userBtn(m.username)}${m.owner ? ` <small class="muted">owner</small>` : ""}${m.streak ? `<br><small class="muted">${esc(m.streak)}-week streak</small>` : ""}</span>
           <span class="vl">${v != null ? M[groupMetric][1](v) : `<small class="muted">${!m.published ? "not synced yet" : "hidden"}</small>`}</span></li>`; }).join("")}</ol>
       <p class="muted">Resets every Monday. "Hidden" means that person doesn't share this.</p></section>
     ${g.owner ? `<section class="card"><h2>Manage</h2>
@@ -1637,6 +1704,13 @@ async function socAction(a, b){
   if(a === "soc-refresh"){ publishNow(); loadSoc(); render(); return; }
   if(a === "soc-back"){ const back = socGroupId && socProfileName ? "profile" : null; if(back){ socProfileName = null; socProfile = null; } else { socProfileName = socGroupId = null; socProfile = socGroup = null; } render(); window.scrollTo(0, 0); return; }
   if(a === "soc-user") return openProfile(b.dataset.u);
+  if(a === "soc-5ha"){ const it = (socFeed || []).find(x => x.user === b.dataset.u && x.key === b.dataset.i); if(!it) return;
+    const on = !it.fha.mine; it.fha.mine = on; it.fha.n += on ? 1 : -1; it.fha.names = on ? [...it.fha.names.filter(x => x !== "You"), "You"] : it.fha.names.filter(x => x !== "You"); render();
+    const r = await socDo("/social/5ha", { user: it.user, item: it.key, on, label: fhaLabel(it) });
+    if(r) it.fha.n = r.n; else { it.fha.mine = !on; it.fha.n += on ? -1 : 1; it.fha.names = on ? it.fha.names.filter(x => x !== "You") : [...it.fha.names, "You"]; }
+    render(); return; }
+  if(a === "soc-av-rm"){ if(!(await ask("Remove your profile photo?", "Remove", true))) return;
+    const r = await socDo("/social/avatar", { remove: true }, "Photo removed"); if(r && soc){ soc.avatar = null; loadSoc(); render(); } return; }
   if(a === "soc-group") return openGroup(+b.dataset.id);
   if(a === "soc-invite") return shareInvite("friend", soc.code);
   if(a === "grp-invite") return shareInvite("group", socGroup.code, socGroup.name);
@@ -1687,6 +1761,7 @@ function notifLine(n){
   if(n.kind === "accepted") return `${a} accepted your friend request`;
   if(n.kind === "declined") return `${a} declined your friend request`;
   if(n.kind === "joined") return `${a} joined <b>${esc(n.group ? n.group.name : "your group")}</b>`;
+  if(n.kind === "5ha") return `${a} gave you ✋ 5Ha!${n.label ? ` for <b>${esc(n.label)}</b>` : ""}`;
   return "Something new";
 }
 const notifPlain = n => notifLine(n).replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'");
@@ -1719,7 +1794,7 @@ function showReqSheet(){
   const n = notifs.find(x => x.kind === "req" && x.pending && !sheetSkip.has(x.id)); if(!n) return;
   const back = document.createElement("div"); back.className = "modal-back"; back.id = "reqSheet";
   back.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-labelledby="reqTitle">
-    <div class="row" style="justify-content:flex-start"><span class="avatar" aria-hidden="true">${esc(n.actor.slice(0, 1).toUpperCase())}</span><p id="reqTitle" style="margin:0"><b>${esc(n.actor)}</b> wants to be friends</p></div>
+    <div class="row" style="justify-content:flex-start">${avatarHtml(n.actor, n.avatar, 40)}<p id="reqTitle" style="margin:0"><b>${esc(n.actor)}</b> wants to be friends</p></div>
     <p class="muted" style="margin:0">If you accept, you'll see each other's shared workouts, PRs, runs and streaks.</p>
     <div class="row" style="flex-wrap:wrap"><button class="btn ghost" data-sheet="later">Later</button><button class="btn" data-sheet="no">Decline</button><button class="btn primary" data-sheet="yes">Accept</button></div></div>`;
   document.body.appendChild(back);
@@ -1788,7 +1863,7 @@ function renderNotifs(){
       : st === "denied" ? `<p class="muted" style="margin:0">Notifications are blocked for OnlyPains. Allow them in your phone or browser settings, then come back here.</p>`
       : `<p class="muted" style="margin:0">This browser can't show notifications. You'll still see them here.</p>`}</section>`;
   const list = notifs == null ? `<p class="muted">Loading…</p>` : !notifs.length ? `<p class="muted">Nothing yet. Friend requests and group joins show up here.</p>`
-    : `<ul class="feed">${notifs.map(n => `<li class="feed-item ${n.read ? "" : "unread"}"><div class="row between" style="align-items:flex-start"><span>${notifLine(n)}</span><small class="muted" style="white-space:nowrap">${ago(n.at)}</small></div>
+    : `<ul class="feed">${notifs.map(n => `<li class="feed-item ${n.read ? "" : "unread"}"><div class="row between" style="align-items:flex-start"><span class="row" style="gap:8px;align-items:flex-start">${avatarHtml(n.actor, n.avatar, 30)}<span>${notifLine(n)}</span></span><small class="muted" style="white-space:nowrap">${ago(n.at)}</small></div>
         ${n.kind === "req" ? (n.pending ? `<div class="row"><button class="btn small primary" data-action="nt-accept" data-u="${esc(n.actor)}">Accept</button><button class="btn small" data-action="nt-decline" data-u="${esc(n.actor)}">Decline</button></div>` : `<small class="muted">Answered</small>`) : ""}
         ${n.kind === "joined" && n.group ? `<div><button class="link-btn" data-action="nt-group" data-id="${n.group.id}">Open ${esc(n.group.name)}</button></div>` : ""}
         ${n.kind === "accepted" ? `<div><button class="link-btn" data-action="soc-user" data-u="${esc(n.actor)}">See ${esc(n.actor)}'s profile</button></div>` : ""}</li>`).join("")}</ul>`;
@@ -2101,8 +2176,14 @@ async function handleWriteError(e){
 
 /* ---------- app version & patch notes ----------
    Every update: bump APP_VERSION and add an entry at the TOP of PATCH_NOTES (see CLAUDE.md). */
-const APP_VERSION = "1.7";
+const APP_VERSION = "1.8";
 const PATCH_NOTES = [
+  { v: "1.8", date: "2026-11-19", items: [
+    "5Ha!: give your friends a 5Ha! on their workouts, runs and milestones in the Feed. You get a notification when someone gives you one",
+    "Milestones you unlock now show up in your friends' Feed",
+    "Profile photos: add one under Friends > Your profile. It shows next to your name for friends and group-mates",
+    "Friend profiles now list their latest achievements",
+    "Fixed the Paste and Add buttons squashing on narrow phones" ] },
   { v: "1.7", date: "2026-11-19", items: [
     "Notifications: tap the bell at the top to see friend requests, answers to your requests and people joining your groups",
     "Accept or decline friend requests right in the app: a pop-up asks you when a request comes in, or use the bell",

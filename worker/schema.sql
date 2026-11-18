@@ -21,3 +21,6 @@ CREATE INDEX IF NOT EXISTS notifs_user ON notifs(user_id, id);
 CREATE TABLE IF NOT EXISTS push_subs (endpoint TEXT PRIMARY KEY, user_id INTEGER NOT NULL, p256dh TEXT NOT NULL, auth TEXT NOT NULL, created INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS push_subs_user ON push_subs(user_id);
 CREATE TABLE IF NOT EXISTS app_kv (k TEXT PRIMARY KEY, v TEXT NOT NULL);
+-- 5HA reactions and profile photos (also created automatically)
+CREATE TABLE IF NOT EXISTS kudos (owner_id INTEGER NOT NULL, item TEXT NOT NULL, giver_id INTEGER NOT NULL, created INTEGER NOT NULL, PRIMARY KEY (owner_id, item, giver_id));
+CREATE TABLE IF NOT EXISTS avatars (user_id INTEGER PRIMARY KEY, k TEXT NOT NULL UNIQUE, data TEXT NOT NULL, updated INTEGER NOT NULL);
