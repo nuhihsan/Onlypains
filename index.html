@@ -223,7 +223,11 @@ details summary{cursor:pointer;min-height:32px;display:flex;align-items:center}
 .board .rk{width:22px;font-weight:800;text-align:center}
 .board .nm{flex:1;min-width:0}
 .board .vl{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
-#friendsBtn{position:relative}
+#friendsBtn,#bellBtn{position:relative}
+@media (max-width:430px){ .wk-lbl{display:none} header .icon-btn{padding:6px 5px} }
+#bellBtn .badge{position:absolute;top:2px;right:0;min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:var(--warn);color:#fff;font-size:11px;font-weight:800;line-height:17px;text-align:center}
+.feed-item.unread{border-color:var(--accent);background:var(--accent-soft)}
+.avatar{width:36px;height:36px;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:inline-flex;align-items:center;justify-content:center;font-weight:800;flex:none}
 #friendsBtn .dot{position:absolute;top:6px;right:5px;width:9px;height:9px;border-radius:50%;background:var(--warn)}
 </style>
 </head>
@@ -232,6 +236,7 @@ details summary{cursor:pointer;min-height:32px;display:flex;align-items:center}
   <header>
     <h1><svg viewBox="0 0 512 512" width="30" height="30" aria-hidden="true" style="vertical-align:-5px;margin-right:8px;border-radius:7px"><rect width="512" height="512" rx="112" fill="#1d55c4"/><g transform="translate(0 6)"><circle cx="176" cy="250" r="118" fill="#fff"/><circle cx="176" cy="250" r="88" fill="#1d55c4"/><circle cx="176" cy="250" r="64" fill="#fff"/><circle cx="176" cy="250" r="22" fill="#1d55c4"/><g fill="#1d55c4"><ellipse cx="176" cy="208" rx="9" ry="13"/><ellipse cx="176" cy="292" rx="9" ry="13"/><ellipse cx="134" cy="250" rx="13" ry="9"/><ellipse cx="218" cy="250" rx="13" ry="9"/></g><path fill="#fff" d="M308 132h86a86 86 0 0 1 0 172h-30v64h-56zm56 52v68h26a34 34 0 0 0 0-68z"/></g></svg>OnlyPains</h1>
     <div class="row" style="gap:6px"><span id="weekChip" class="chip info">This week: 0</span>
+      <button class="icon-btn" id="bellBtn" data-view="notifs" aria-label="Notifications"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2.2 2.2 0 0 0 4 0"/></svg><span class="badge" id="bellBadge" hidden>0</span></button>
       <button class="icon-btn" id="friendsBtn" data-view="friends" aria-label="Friends and groups"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 19c.6-3.2 3-5 6-5s5.4 1.8 6 5"/><circle cx="17" cy="9" r="2.4"/><path d="M16.5 14.2c2.3.2 4 1.8 4.5 4.3"/></svg><span class="dot" id="friendsDot" hidden></span></button>
       <button class="icon-btn" id="setupBtn" data-view="setup" aria-label="Setup: exercises and targets"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button></div>
   </header>
@@ -1299,7 +1304,7 @@ async function syncNow(){
     syncState = "ok";
     publishSoon();
   } catch(e){
-    if(e && e.status === 401){ acct = null; saveAcct(); syncState = "off"; socReset(); toast("You were signed out. Sign in again in Setup to keep syncing."); if(view === "setup") render(); }
+    if(e && e.status === 401){ acct = null; saveAcct(); syncState = "off"; socReset(); notifs = null; notifUnread = 0; updBadge(); toast("You were signed out. Sign in again in Setup to keep syncing."); if(view === "setup") render(); }
     else syncState = e && e.status === 0 ? "offline" : "error";
   }
   syncing = false; updSyncUi();
@@ -1321,6 +1326,7 @@ async function finishSignIn(r, isNew){
   toast(isNew ? `Account created. Welcome, ${r.username}!` : `Signed in as ${r.username}`);
   if(pendingInvite()) view = "friends";
   render(); await syncNow();
+  pushChecked = false; checkNotifs();
 }
 /* Sign in with Google: Google's own button gives us a signed token, the Worker checks it. */
 let gisLoading = null;
@@ -1367,8 +1373,9 @@ async function signOut(){
   if(Object.keys(acct.dirty).length) await syncNow();
   const pending = acct && Object.keys(acct.dirty).length;
   if(!(await ask(pending ? "Some changes haven't synced yet and will be lost if you sign out now. Sign out anyway?" : "Sign out? Your log stays safe in your account and is removed from this phone until you sign in again.", "Sign out", !!pending))) return;
+  await disablePush(true);
   try { await api("/auth/logout"); } catch(e){}
-  acct = null; saveAcct(); syncState = "off"; socReset();
+  acct = null; saveAcct(); syncState = "off"; socReset(); notifs = null; notifUnread = 0; pushChecked = false; sheetSkip.clear(); updBadge();
   if(db && db.raw) db.raw.clear();
   toast("Signed out"); render();
 }
@@ -1421,6 +1428,14 @@ let socProfileName = null, socProfile = null, socGroupId = null, socGroup = null
 let pubTimer = null;
 const INVITE_KEY = "onlypains-invite";
 const appLink = () => location.href.split("#")[0];
+const inHomeApp = () => !!(navigator.standalone || (window.matchMedia && matchMedia("(display-mode: standalone)").matches));
+const canPaste = () => !!(navigator.clipboard && navigator.clipboard.readText);
+// pull a friend or group code out of whatever was pasted: the code itself, an invite link or the whole invite message
+function extractCode(text){
+  const t = String(text || "").toUpperCase();
+  const m = t.match(/(?:ADD|JOIN)=([A-Z0-9]{6,12})/) || t.match(/CODE[:\s]+([A-Z0-9]{6,12})/) || t.match(/\b(?=[A-Z0-9]*\d)[A-Z0-9]{8}\b/) || t.match(/\b[A-Z0-9]{8}\b/);
+  return m ? m[1] || m[0] : t.replace(/[^A-Z0-9]/g, "").slice(0, 12);
+}
 function socReset(){ soc = socFeed = socProfile = socGroup = socErr = null; socProfileName = socGroupId = null; socTab = "feed"; }
 function buildPublic(){
   const vol = s => (s.entries || []).reduce((b, e) => b + e.sets.reduce((c, x) => c + num(x.kg) * num(x.reps), 0), 0);
@@ -1487,7 +1502,9 @@ async function openGroup(id){
 }
 async function shareInvite(kind, code, name){
   const url = appLink() + "#" + (kind === "group" ? "join" : "add") + "=" + code;
-  const text = kind === "group" ? `Join my OnlyPains group "${name}": ${url}` : `Add me on OnlyPains (code ${code}): ${url}`;
+  const text = kind === "group"
+    ? `Join my OnlyPains group "${name}". Group code: ${code}\nIn the app: tap the people icon, then Groups, then Join a group.\nOr open: ${url}`
+    : `Add me on OnlyPains. My friend code: ${code}\nIn the app: tap the people icon, then Friends, then Add a friend.\nOr open: ${url}`;
   try { if(navigator.share){ await navigator.share({ title: "OnlyPains", text }); return; } } catch(e){ if(e && e.name === "AbortError") return; }
   try { await navigator.clipboard.writeText(text); toast("Invite copied. Paste it into WhatsApp or Telegram."); }
   catch(e){ toast(`Send them this code: ${code}`); }
@@ -1525,7 +1542,10 @@ function renderFriends(){
   if(!WORKER_URL || storageMode !== "local") return `<section class="card"><h2>Friends</h2><p class="muted">Friends and groups work in the online version of OnlyPains.</p></section>`;
   const inv = pendingInvite();
   if(!acct) return `<section class="card"><h2>Friends and groups</h2>
-    ${inv ? `<p><b>You've been invited${inv.kind === "join" ? " to a group" : " to be friends"}.</b> Sign in first and it will be added automatically.</p>` : ""}
+    ${inv ? `<p><b>You've been invited${inv.kind === "join" ? " to a group" : " to be friends"}.</b></p>
+      <div class="code-box">${esc(inv.code)}</div>
+      <button class="btn primary" data-action="soc-copy" data-c="${esc(inv.code)}">Copy code</button>
+      <p class="muted" style="margin:0">${inHomeApp() ? "Sign in below and it will be added automatically." : `<b>Use OnlyPains from your home screen?</b> Links always open in the browser, so copy the code, open the app from your home screen and tap the people icon, then <b>${inv.kind === "join" ? "Groups, Join a group" : "Friends, Add a friend"}</b> and paste it. Or sign in here and it's added automatically.`}</p>` : ""}
     <p class="muted">Add friends with a code, make a group with your gym crew, and see each other's workouts, PRs, runs and streaks. You choose what friends can see, and your food log is never shared.</p>
     <button class="btn primary" data-view="setup">Sign in under Account</button></section>`;
   if(socProfileName) return renderSocProfile();
@@ -1545,7 +1565,8 @@ function renderFriends(){
         <div class="row" style="flex-wrap:wrap"><button class="btn primary" data-action="soc-invite">Send invite link</button><button class="btn" data-action="soc-copy" data-c="${esc(soc.code)}">Copy code</button></div>
         <p class="muted">Friends tap your link or type your code. You'll both see each other once they're added.</p></section>
       <section class="card"><h2>Add a friend</h2>
-        <div class="row"><input id="soc-code" class="mini" style="flex:1;width:auto;text-transform:uppercase" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="12" placeholder="Their 8-letter code"><button class="btn primary" data-action="soc-add">Add</button></div></section>
+        <div class="row"><input id="soc-code" class="mini" style="flex:1;width:auto;text-transform:uppercase" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="12" placeholder="Their 8-letter code">${canPaste() ? `<button class="btn" data-action="soc-paste" data-for="soc-code">Paste</button>` : ""}<button class="btn primary" data-action="soc-add">Add</button></div>
+        <p class="muted" style="margin:0">You can paste their whole invite message. The code is picked out for you.</p></section>
       <section class="card"><h2>Friends (${soc.friends.length})</h2>
         ${soc.friends.length ? `<ul class="ex-list">${soc.friends.map(f => `<li><span>${userBtn(f.username)}<br><small class="muted">${f.active ? "Updated " + ago(f.active) : "Hasn't synced the new version yet"}</small></span>
           <button class="icon-btn" data-action="soc-unfriend" data-u="${esc(f.username)}" aria-label="Remove ${esc(f.username)}">✕</button></li>`).join("")}</ul>` : `<p class="muted">No friends yet. Send your invite link to get started.</p>`}
@@ -1560,7 +1581,7 @@ function renderFriends(){
         ${soc.groups.length ? `<ul class="ex-list">${soc.groups.map(g => `<li><span><button class="link-btn" data-action="soc-group" data-id="${g.id}">${esc(g.name)}</button><br><small class="muted">${g.members} member${g.members === 1 ? "" : "s"}${g.owner ? " · you own it" : ""}</small></span>
           <button class="btn small" data-action="soc-group" data-id="${g.id}">Open</button></li>`).join("")}</ul>` : `<p class="muted">You're not in any groups yet. Make one for your gym crew, or join with a code.</p>`}</section>
       <section class="card"><h2>Join a group</h2>
-        <div class="row"><input id="grp-code" class="mini" style="flex:1;width:auto;text-transform:uppercase" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="12" placeholder="Group code"><button class="btn primary" data-action="grp-join">Join</button></div></section>
+        <div class="row"><input id="grp-code" class="mini" style="flex:1;width:auto;text-transform:uppercase" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="12" placeholder="Group code">${canPaste() ? `<button class="btn" data-action="soc-paste" data-for="grp-code">Paste</button>` : ""}<button class="btn primary" data-action="grp-join">Join</button></div></section>
       <section class="card"><h2>New group</h2>
         <div class="row"><input id="grp-name" class="mini" style="flex:1;width:auto" maxlength="30" placeholder="e.g. Gym Bros"><button class="btn" data-action="grp-create">Create</button></div>
         <p class="muted">Everyone in a group sees each other's shared stats and a weekly leaderboard, even if they aren't friends.</p></section>`;
@@ -1620,16 +1641,18 @@ async function socAction(a, b){
   if(a === "soc-invite") return shareInvite("friend", soc.code);
   if(a === "grp-invite") return shareInvite("group", socGroup.code, socGroup.name);
   if(a === "soc-copy"){ try { await navigator.clipboard.writeText(b.dataset.c); toast("Code copied"); } catch(e){ toast(`Your code is ${b.dataset.c}`); } return; }
-  if(a === "soc-add"){ const c = document.getElementById("soc-code")?.value || ""; if(!c.trim()) return toast("Type your friend's code.");
+  if(a === "soc-paste"){ const el = document.getElementById(b.dataset.for); if(!el) return;
+    try { const c = extractCode(await navigator.clipboard.readText()); if(!c) return toast("Nothing to paste. Copy the code first."); el.value = c; } catch(e){ toast("Couldn't paste. Tap the box and paste it yourself."); } return; }
+  if(a === "soc-add"){ const c = extractCode(document.getElementById("soc-code")?.value); if(!c) return toast("Type your friend's code.");
     const r = await socDo("/social/add", { code: c }, r => r.status === "friends" ? `You and ${r.username} are friends` : `Request sent to ${r.username}. They'll see it in Friends.`); if(r) loadSoc(); return; }
-  if(a === "soc-accept"){ if(await socDo("/social/respond", { username: b.dataset.u, accept: true }, `You and ${b.dataset.u} are friends`)) loadSoc(); return; }
-  if(a === "soc-decline"){ if(await socDo("/social/respond", { username: b.dataset.u, accept: false })) loadSoc(); return; }
+  if(a === "soc-accept") return answerReq(b.dataset.u, true);
+  if(a === "soc-decline") return answerReq(b.dataset.u, false);
   if(a === "soc-cancel"){ if(await socDo("/social/remove", { username: b.dataset.u }, "Request cancelled")) loadSoc(); return; }
   if(a === "soc-unfriend"){ if(!(await ask(`Remove ${b.dataset.u} as a friend? You'll stop seeing each other unless you share a group.`, "Remove", true))) return;
     if(await socDo("/social/remove", { username: b.dataset.u }, "Friend removed")){ socProfileName = null; socProfile = null; loadSoc(); render(); } return; }
   if(a === "grp-create"){ const n = document.getElementById("grp-name")?.value || ""; if(n.trim().length < 2) return toast("Give the group a name.");
     const r = await socDo("/group/create", { name: n }, "Group created. Send the invite link to your friends."); if(r){ loadSoc(); openGroup(r.id); } return; }
-  if(a === "grp-join"){ const c = document.getElementById("grp-code")?.value || ""; if(!c.trim()) return toast("Type the group code.");
+  if(a === "grp-join"){ const c = extractCode(document.getElementById("grp-code")?.value); if(!c) return toast("Type the group code.");
     const r = await socDo("/group/join", { code: c }, r => r.already ? `You're already in ${r.name}` : `You joined ${r.name}`); if(r){ loadSoc(); openGroup(r.id); } return; }
   if(a === "grp-metric"){ groupMetric = b.dataset.m; render(); return; }
   if(a === "grp-leave"){ if(!(await ask(`Leave ${socGroup.name}?${socGroup.owner && socGroup.members.length > 1 ? " Someone else will become the owner." : ""}`, "Leave", true))) return;
@@ -1651,6 +1674,138 @@ document.addEventListener("keydown", ev => {
   if(ev.key !== "Enter") return;
   const id = ev.target && ev.target.id, a = id === "soc-code" ? "soc-add" : id === "grp-code" ? "grp-join" : id === "grp-name" ? "grp-create" : null;
   if(a){ ev.preventDefault(); document.querySelector(`[data-action="${a}"]`)?.click(); }
+});
+
+/* ---------- notifications ----------
+   The bell lists friend requests (with Accept and Decline), accepted and declined requests, and people joining your groups.
+   Phone notifications use Web Push through the Worker; on iPhone they need the home screen app (iOS 16.4 or later). */
+let notifs = null, notifUnread = 0, notifBusy = false, pushOn = false, pushChecked = false;
+const sheetSkip = new Set();
+function notifLine(n){
+  const a = `<b>${esc(n.actor)}</b>`;
+  if(n.kind === "req") return `${a} sent you a friend request`;
+  if(n.kind === "accepted") return `${a} accepted your friend request`;
+  if(n.kind === "declined") return `${a} declined your friend request`;
+  if(n.kind === "joined") return `${a} joined <b>${esc(n.group ? n.group.name : "your group")}</b>`;
+  return "Something new";
+}
+const notifPlain = n => notifLine(n).replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+function updBadge(){
+  const el = document.getElementById("bellBadge"); if(!el) return;
+  el.hidden = !(acct && notifUnread > 0); el.textContent = notifUnread > 9 ? "9+" : String(notifUnread);
+  const bell = document.getElementById("bellBtn"); if(bell) bell.setAttribute("aria-label", notifUnread ? `Notifications, ${notifUnread} new` : "Notifications");
+}
+async function checkNotifs(){
+  if(!acct || !WORKER_URL || notifBusy) return;
+  notifBusy = true;
+  try {
+    const r = await api("/social/notifs");
+    const first = acct.lastNotif == null, top = r.items.length ? r.items[0].id : 0;
+    const fresh = first ? [] : r.items.filter(n => n.id > acct.lastNotif && !n.read);
+    notifs = r.items; notifUnread = r.unread;
+    if(top > (acct.lastNotif || 0) || first){ acct.lastNotif = Math.max(acct.lastNotif || 0, top); saveAcct(); }
+    const news = fresh.filter(n => n.kind !== "req");
+    if(news.length && view !== "notifs") toast(news.length === 1 ? notifPlain(news[0]) : `${news.length} new notifications`);
+    if(fresh.length && soc){ loadSoc(); }
+    if(view === "notifs"){ if(r.unread) markNotifsRead(); if(!document.activeElement?.matches?.("input")) render(); }
+  } catch(e){}
+  notifBusy = false; updBadge(); showReqSheet(); syncPushSub();
+}
+async function markNotifsRead(){ notifUnread = 0; updBadge(); try { await api("/social/notifs-read"); } catch(e){} }
+// pop-up for friend requests, so they can be answered from anywhere in the app
+function showReqSheet(){
+  if(!acct || !notifs || document.getElementById("reqSheet") || document.querySelector(".modal-back")) return;
+  if(view === "notifs" || (view === "log" && draft)) return; // not mid-workout
+  const n = notifs.find(x => x.kind === "req" && x.pending && !sheetSkip.has(x.id)); if(!n) return;
+  const back = document.createElement("div"); back.className = "modal-back"; back.id = "reqSheet";
+  back.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-labelledby="reqTitle">
+    <div class="row" style="justify-content:flex-start"><span class="avatar" aria-hidden="true">${esc(n.actor.slice(0, 1).toUpperCase())}</span><p id="reqTitle" style="margin:0"><b>${esc(n.actor)}</b> wants to be friends</p></div>
+    <p class="muted" style="margin:0">If you accept, you'll see each other's shared workouts, PRs, runs and streaks.</p>
+    <div class="row" style="flex-wrap:wrap"><button class="btn ghost" data-sheet="later">Later</button><button class="btn" data-sheet="no">Decline</button><button class="btn primary" data-sheet="yes">Accept</button></div></div>`;
+  document.body.appendChild(back);
+  const close = () => { sheetSkip.add(n.id); back.remove(); };
+  back.addEventListener("click", async e => {
+    const d = e.target.closest("[data-sheet]")?.dataset.sheet;
+    if(e.target === back || d === "later"){ close(); return; }
+    if(d === "yes" || d === "no"){ close(); await answerReq(n.actor, d === "yes"); setTimeout(showReqSheet, 400); }
+  });
+  back.querySelector('[data-sheet="yes"]').focus();
+}
+async function answerReq(u, accept){
+  const r = await socDo("/social/respond", { username: u, accept }, accept ? `You and ${u} are friends` : `Declined ${u}'s request`);
+  if(r){ if(notifs) for(const n of notifs) if(n.kind === "req" && n.actor === u) n.pending = false; loadSoc(); checkNotifs(); if(view === "notifs" || view === "friends") render(); }
+}
+function pushSupport(){
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  if(!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) return ios && !inHomeApp() ? "ios-browser" : "none";
+  if(ios && !inHomeApp()) return "ios-browser";
+  if(Notification.permission === "denied") return "denied";
+  return "ok";
+}
+const b64uBytes = s => { s = s.replace(/-/g, "+").replace(/_/g, "/"); const bin = atob(s + "===".slice((s.length + 3) % 4)); return Uint8Array.from(bin, c => c.charCodeAt(0)); };
+// keep the server's copy of this phone's subscription in step (e.g. after signing in as someone else)
+async function syncPushSub(){
+  if(pushChecked || !acct || pushSupport() !== "ok") return;
+  pushChecked = true;
+  try {
+    const reg = await navigator.serviceWorker.getRegistration(); const sub = reg && await reg.pushManager.getSubscription();
+    pushOn = !!(sub && Notification.permission === "granted");
+    if(pushOn) await api("/push/subscribe", sub.toJSON());
+    if(view === "notifs") render();
+  } catch(e){}
+}
+async function enablePush(){
+  const st = pushSupport();
+  if(st !== "ok") return toast(st === "ios-browser" ? "On iPhone, open OnlyPains from your home screen to turn on notifications." : st === "denied" ? "Notifications are blocked for OnlyPains. Allow them in your phone's settings." : "This browser can't show notifications.");
+  try {
+    const perm = await Notification.requestPermission();
+    if(perm !== "granted") return toast("Notifications weren't allowed.");
+    const reg = await navigator.serviceWorker.ready;
+    const { key } = await api("/push/key");
+    let sub = await reg.pushManager.getSubscription();
+    if(sub){ const cur = sub.options && sub.options.applicationServerKey; if(cur && btoa(String.fromCharCode(...new Uint8Array(cur))) !== btoa(String.fromCharCode(...b64uBytes(key)))){ await sub.unsubscribe(); sub = null; } }
+    if(!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uBytes(key) });
+    await api("/push/subscribe", sub.toJSON());
+    pushOn = true; toast("Notifications on"); render();
+    api("/push/test").catch(() => {});
+  } catch(e){ toast(e && e.error ? e.error : "Couldn't turn on notifications. Try again."); }
+}
+async function disablePush(silent){
+  try {
+    const reg = await navigator.serviceWorker.getRegistration(); const sub = reg && await reg.pushManager.getSubscription();
+    if(sub){ try { await api("/push/unsubscribe", { endpoint: sub.endpoint }); } catch(e){} await sub.unsubscribe(); }
+  } catch(e){}
+  pushOn = false; if(!silent){ toast("Notifications off on this phone"); render(); }
+}
+function renderNotifs(){
+  if(!WORKER_URL || storageMode !== "local") return `<section class="card"><h2>Notifications</h2><p class="muted">Notifications work in the online version of OnlyPains.</p></section>`;
+  if(!acct) return `<section class="card"><h2>Notifications</h2><p class="muted">Sign in to get notified about friend requests and people joining your groups.</p><button class="btn primary" data-view="setup">Sign in under Account</button></section>`;
+  const st = pushSupport();
+  const pushCard = `<section class="card"><h2>Phone notifications</h2>
+    ${pushOn ? `<p class="muted" style="margin:0">On for this phone. You'll get an alert for friend requests, answers to your requests and people joining your groups.</p><button class="btn" data-action="push-off">Turn off on this phone</button>`
+      : st === "ok" ? `<p class="muted" style="margin:0">Get an alert on this phone even when OnlyPains is closed.</p><button class="btn primary" data-action="push-on">Turn on notifications</button>`
+      : st === "ios-browser" ? `<p class="muted" style="margin:0">On iPhone, notifications only work in the home screen app. Open OnlyPains from your home screen (iOS 16.4 or later) and turn them on there.</p>`
+      : st === "denied" ? `<p class="muted" style="margin:0">Notifications are blocked for OnlyPains. Allow them in your phone or browser settings, then come back here.</p>`
+      : `<p class="muted" style="margin:0">This browser can't show notifications. You'll still see them here.</p>`}</section>`;
+  const list = notifs == null ? `<p class="muted">Loading…</p>` : !notifs.length ? `<p class="muted">Nothing yet. Friend requests and group joins show up here.</p>`
+    : `<ul class="feed">${notifs.map(n => `<li class="feed-item ${n.read ? "" : "unread"}"><div class="row between" style="align-items:flex-start"><span>${notifLine(n)}</span><small class="muted" style="white-space:nowrap">${ago(n.at)}</small></div>
+        ${n.kind === "req" ? (n.pending ? `<div class="row"><button class="btn small primary" data-action="nt-accept" data-u="${esc(n.actor)}">Accept</button><button class="btn small" data-action="nt-decline" data-u="${esc(n.actor)}">Decline</button></div>` : `<small class="muted">Answered</small>`) : ""}
+        ${n.kind === "joined" && n.group ? `<div><button class="link-btn" data-action="nt-group" data-id="${n.group.id}">Open ${esc(n.group.name)}</button></div>` : ""}
+        ${n.kind === "accepted" ? `<div><button class="link-btn" data-action="soc-user" data-u="${esc(n.actor)}">See ${esc(n.actor)}'s profile</button></div>` : ""}</li>`).join("")}</ul>`;
+  return `<section class="card"><div class="row between"><h2>Notifications</h2><button class="btn small" data-action="nt-refresh">Refresh</button></div>${list}<p class="muted" style="margin:0">Kept for 30 days.</p></section>${pushCard}`;
+}
+async function notifAction(a, b){
+  if(a === "nt-accept") return answerReq(b.dataset.u, true);
+  if(a === "nt-decline") return answerReq(b.dataset.u, false);
+  if(a === "nt-refresh"){ notifBusy = false; return checkNotifs(); }
+  if(a === "nt-group"){ view = "friends"; socTab = "groups"; return openGroup(+b.dataset.id); }
+  if(a === "push-on") return enablePush();
+  if(a === "push-off") return disablePush();
+}
+if("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("message", e => {
+  const d = e.data || {};
+  if(d.type === "open-notifs"){ view = "notifs"; socProfileName = socGroupId = null; render(); window.scrollTo(0, 0); }
+  if(d.type === "open-notifs" || d.type === "notif"){ notifBusy = false; checkNotifs(); }
 });
 
 /* ---------- backup & restore ---------- */
@@ -1913,6 +2068,7 @@ function weekCount(){ const m = mondayStr(); return sessions.filter(s => s.date 
 
 /* ---------- UI primitives ---------- */
 function toast(msg){
+  document.querySelectorAll(".toast").forEach(x => x.remove()); // one at a time, newest wins
   const t = document.createElement("div"); t.className = "toast"; t.textContent = msg;
   document.body.appendChild(t); setTimeout(() => t.remove(), 2600);
 }
@@ -1945,8 +2101,15 @@ async function handleWriteError(e){
 
 /* ---------- app version & patch notes ----------
    Every update: bump APP_VERSION and add an entry at the TOP of PATCH_NOTES (see CLAUDE.md). */
-const APP_VERSION = "1.6";
+const APP_VERSION = "1.7";
 const PATCH_NOTES = [
+  { v: "1.7", date: "2026-11-19", items: [
+    "Notifications: tap the bell at the top to see friend requests, answers to your requests and people joining your groups",
+    "Accept or decline friend requests right in the app: a pop-up asks you when a request comes in, or use the bell",
+    "Phone notifications: turn them on under the bell to get alerts even when OnlyPains is closed (on iPhone, from the home screen app, iOS 16.4 or later)",
+    "Invite messages now lead with the friend or group code, with steps for adding it in the app",
+    "Opening an invite link in the browser shows the code with a Copy button, so iPhone users can add it in the home screen app",
+    "New Paste button next to the code boxes. Paste a whole invite message and the code is picked out for you" ] },
   { v: "1.6", date: "2026-11-18", items: [
     "Friends and groups: tap the people icon at the top. You need to be signed in",
     "Add friends with your 8-letter friend code or an invite link you can send on WhatsApp or Telegram",
@@ -2014,7 +2177,8 @@ function patchNotesHtml(){
 function renderWeekChip(){
   const n = weekCount(), chip = document.getElementById("weekChip");
   chip.className = "chip " + (n >= cfg.weekMin ? "good" : "warn");
-  chip.textContent = n > cfg.weekMax ? `This week: ${n} (over ${cfg.weekMax})` : `This week: ${n} of ${cfg.weekMin}–${cfg.weekMax}`;
+  chip.innerHTML = `<span class="wk-lbl">This week: </span>` + esc(n > cfg.weekMax ? `${n} (over ${cfg.weekMax})` : `${n} of ${cfg.weekMin}–${cfg.weekMax}`);
+  chip.setAttribute("aria-label", `This week: ${n} of ${cfg.weekMin} to ${cfg.weekMax} sessions`);
 }
 
 function renderLog(){
@@ -2300,7 +2464,7 @@ function hubSeg(){
 }
 function render(){
   const main = document.getElementById("main");
-  main.innerHTML = view === "log" ? renderLog() : view === "history" ? renderHistory() : view === "progress" ? renderProgress() : view === "body" ? renderBody() : view === "run" ? renderRun() : view === "compare" ? renderCompare() : view === "food" ? renderFood() : view === "feedback" ? renderFeedback() : view === "friends" ? renderFriends() : view === "pick" && pick ? renderPick() : renderSetup();
+  main.innerHTML = view === "log" ? renderLog() : view === "history" ? renderHistory() : view === "progress" ? renderProgress() : view === "body" ? renderBody() : view === "run" ? renderRun() : view === "compare" ? renderCompare() : view === "food" ? renderFood() : view === "feedback" ? renderFeedback() : view === "friends" ? renderFriends() : view === "notifs" ? renderNotifs() : view === "pick" && pick ? renderPick() : renderSetup();
   if(view === "progress" || view === "compare" || view === "history") main.insertAdjacentHTML("afterbegin", hubSeg());
   const navView = view === "history" || view === "compare" ? "progress" : view === "pick" ? (pick && pick.mode === "template" ? "setup" : "log") : view;
   document.querySelectorAll("[data-view]").forEach(b => b.setAttribute("aria-current", b.dataset.view === navView ? "page" : "false"));
@@ -2308,6 +2472,8 @@ function render(){
   renderWeekChip();
   if(view === "setup") mountGoogle();
   if(view === "friends" && acct && !soc && !socBusy && !socErr) loadSoc();
+  if(view === "notifs" && acct && notifs == null && !notifBusy) checkNotifs();
+  updBadge();
   const dot = document.getElementById("friendsDot"); if(dot) dot.hidden = !(soc && soc.incoming.length);
 }
 
@@ -2316,6 +2482,7 @@ function setEl(ei, si){ return document.querySelector(`.set[data-e="${ei}"][data
 document.addEventListener("click", async ev => {
   const nb = ev.target.closest("[data-view]");
   if(nb){ if(view === "feedback") fbSync();
+    if(nb.dataset.view === "notifs" && acct){ notifBusy = false; checkNotifs(); if(notifUnread) markNotifsRead(); }
     if(nb.dataset.view === "friends"){ socProfileName = socGroupId = null; socProfile = socGroup = null; socErr = null; if(acct && soc){ loadSoc(); publishNow(); } } if(view === "setup" && nb.dataset.view !== "setup") setupDraft = null; view = nb.dataset.view; render(); window.scrollTo(0,0); return; }
   const b = ev.target.closest("[data-action]"); if(!b) return;
   const a = b.dataset.action;
@@ -2323,6 +2490,7 @@ document.addEventListener("click", async ev => {
   const ei = row ? +row.dataset.e : +b.dataset.e, si = row ? +row.dataset.s : null;
 
   if(a.startsWith("soc-") || a.startsWith("grp-")) return socAction(a, b);
+  if(a.startsWith("nt-") || a.startsWith("push-")) return notifAction(a, b);
   if(a === "sign-in") return signIn("login");
   if(a === "sign-up") return signIn("signup");
   if(a === "sign-out") return signOut();
@@ -2507,6 +2675,7 @@ if("serviceWorker" in navigator && location.protocol === "https:" && !window.cla
   }
   draft = loadDraftLocal();
   if(storageMode === "local" && WORKER_URL){
+    if(location.hash === "#notifs"){ view = "notifs"; try { history.replaceState(null, "", location.pathname + location.search); } catch(e){} }
     takeInvite();
     takeGoogleReturn();
     // invite link opened while the app is already open
@@ -2514,7 +2683,9 @@ if("serviceWorker" in navigator && location.protocol === "https:" && !window.cla
     if(acct) syncNow();
     document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible") scheduleSync(200); });
     window.addEventListener("online", () => scheduleSync(200));
-    setInterval(() => { if(acct && document.visibilityState === "visible") syncNow(); }, 60000);
+    setInterval(() => { if(acct && document.visibilityState === "visible"){ syncNow(); checkNotifs(); } }, 60000);
+    document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible" && acct) checkNotifs(); });
+    if(acct) setTimeout(checkNotifs, 1500);
   }
   if(user){ try { const cw = await user.can("data.write"); if(cw === false) status = "readonly"; } catch(e){} }
   cfgRef = db.doc("data/users/" + uid + "/config");

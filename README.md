@@ -10,6 +10,7 @@ A phone-first web app for logging gym splits, runs, food and body measurements. 
 - **Food:** type what you ate ("2 roti canai, teh tarik") and calories and protein are estimated from a built-in list of about 180 Malaysian and gym foods. Foods you add yourself are remembered.
 - **Progress:** tappable lift charts (top set, est. 1RM or volume over 1M to All, with trend line), hard sets per muscle vs your target, sets and volume per week, personal records, milestones, this period vs last, workout vs workout, run vs run.
 - **Friends and groups:** add friends with a code or invite link, make groups for your gym crew, see a feed of each other's workouts, PRs and runs, open a friend's profile, and compete on a weekly group leaderboard. You choose what friends can see; food is never shared. Needs an account.
+- **Notifications:** a bell for friend requests (accept or decline right there, or from the pop-up), answers to your requests and people joining your groups. Optional phone notifications even when the app is closed (on iPhone, from the home screen app on iOS 16.4 or later).
 - **Versions:** the app shows its version and patch notes in Setup, and a "What's new" card after each update.
 - **Body:** weight, height, waist, body fat, BMI (Asian cut-offs), plus the details used to suggest daily calories (Mifflin-St Jeor) and protein by goal.
 
