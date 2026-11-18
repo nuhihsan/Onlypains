@@ -6,6 +6,7 @@
 - **Cloud sync:** keeps each user's log in the D1 database `onlypains`, so data survives deleting the app or changing phones.
 - **Friends and groups:** friend codes and requests, groups with invite codes, a feed and a weekly leaderboard. Each phone publishes a small summary of its own stats, and the Worker only hands it to that person's friends and group-mates, with whatever they've switched off removed. The tables for this are created automatically the first time someone opens Friends.
 - **Notifications:** friend requests, accepted and declined requests and group joins go to the in-app bell (kept 30 days) and, for phones that switched them on, out as phone notifications using standard Web Push. The signing key for Web Push is made automatically the first time and kept in D1, so there are no extra secrets to set.
+- **5HA and profile photos:** 5HA reactions on feed items (only between friends and group-mates), and profile photos shrunk to 256 px on the phone, stored in D1 and served at a random address that changes with each new photo.
 - **Feedback:** forwards the Feedback tab to Telegram through your bot, tagged with the sender's username and app version.
 
 ## Set up (one time)
