@@ -1421,6 +1421,14 @@ let socProfileName = null, socProfile = null, socGroupId = null, socGroup = null
 let pubTimer = null;
 const INVITE_KEY = "onlypains-invite";
 const appLink = () => location.href.split("#")[0];
+const inHomeApp = () => !!(navigator.standalone || (window.matchMedia && matchMedia("(display-mode: standalone)").matches));
+const canPaste = () => !!(navigator.clipboard && navigator.clipboard.readText);
+// pull a friend or group code out of whatever was pasted: the code itself, an invite link or the whole invite message
+function extractCode(text){
+  const t = String(text || "").toUpperCase();
+  const m = t.match(/(?:ADD|JOIN)=([A-Z0-9]{6,12})/) || t.match(/CODE[:\s]+([A-Z0-9]{6,12})/) || t.match(/\b(?=[A-Z0-9]*\d)[A-Z0-9]{8}\b/) || t.match(/\b[A-Z0-9]{8}\b/);
+  return m ? m[1] || m[0] : t.replace(/[^A-Z0-9]/g, "").slice(0, 12);
+}
 function socReset(){ soc = socFeed = socProfile = socGroup = socErr = null; socProfileName = socGroupId = null; socTab = "feed"; }
 function buildPublic(){
   const vol = s => (s.entries || []).reduce((b, e) => b + e.sets.reduce((c, x) => c + num(x.kg) * num(x.reps), 0), 0);
@@ -1487,7 +1495,9 @@ async function openGroup(id){
 }
 async function shareInvite(kind, code, name){
   const url = appLink() + "#" + (kind === "group" ? "join" : "add") + "=" + code;
-  const text = kind === "group" ? `Join my OnlyPains group "${name}": ${url}` : `Add me on OnlyPains (code ${code}): ${url}`;
+  const text = kind === "group"
+    ? `Join my OnlyPains group "${name}". Group code: ${code}\nIn the app: tap the people icon, then Groups, then Join a group.\nOr open: ${url}`
+    : `Add me on OnlyPains. My friend code: ${code}\nIn the app: tap the people icon, then Friends, then Add a friend.\nOr open: ${url}`;
   try { if(navigator.share){ await navigator.share({ title: "OnlyPains", text }); return; } } catch(e){ if(e && e.name === "AbortError") return; }
   try { await navigator.clipboard.writeText(text); toast("Invite copied. Paste it into WhatsApp or Telegram."); }
   catch(e){ toast(`Send them this code: ${code}`); }
@@ -1525,7 +1535,10 @@ function renderFriends(){
   if(!WORKER_URL || storageMode !== "local") return `<section class="card"><h2>Friends</h2><p class="muted">Friends and groups work in the online version of OnlyPains.</p></section>`;
   const inv = pendingInvite();
   if(!acct) return `<section class="card"><h2>Friends and groups</h2>
-    ${inv ? `<p><b>You've been invited${inv.kind === "join" ? " to a group" : " to be friends"}.</b> Sign in first and it will be added automatically.</p>` : ""}
+    ${inv ? `<p><b>You've been invited${inv.kind === "join" ? " to a group" : " to be friends"}.</b></p>
+      <div class="code-box">${esc(inv.code)}</div>
+      <button class="btn primary" data-action="soc-copy" data-c="${esc(inv.code)}">Copy code</button>
+      <p class="muted" style="margin:0">${inHomeApp() ? "Sign in below and it will be added automatically." : `<b>Use OnlyPains from your home screen?</b> Links always open in the browser, so copy the code, open the app from your home screen and tap the people icon, then <b>${inv.kind === "join" ? "Groups, Join a group" : "Friends, Add a friend"}</b> and paste it. Or sign in here and it's added automatically.`}</p>` : ""}
     <p class="muted">Add friends with a code, make a group with your gym crew, and see each other's workouts, PRs, runs and streaks. You choose what friends can see, and your food log is never shared.</p>
     <button class="btn primary" data-view="setup">Sign in under Account</button></section>`;
   if(socProfileName) return renderSocProfile();
@@ -1545,7 +1558,8 @@ function renderFriends(){
         <div class="row" style="flex-wrap:wrap"><button class="btn primary" data-action="soc-invite">Send invite link</button><button class="btn" data-action="soc-copy" data-c="${esc(soc.code)}">Copy code</button></div>
         <p class="muted">Friends tap your link or type your code. You'll both see each other once they're added.</p></section>
       <section class="card"><h2>Add a friend</h2>
-        <div class="row"><input id="soc-code" class="mini" style="flex:1;width:auto;text-transform:uppercase" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="12" placeholder="Their 8-letter code"><button class="btn primary" data-action="soc-add">Add</button></div></section>
+        <div class="row"><input id="soc-code" class="mini" style="flex:1;width:auto;text-transform:uppercase" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="12" placeholder="Their 8-letter code">${canPaste() ? `<button class="btn" data-action="soc-paste" data-for="soc-code">Paste</button>` : ""}<button class="btn primary" data-action="soc-add">Add</button></div>
+        <p class="muted" style="margin:0">You can paste their whole invite message. The code is picked out for you.</p></section>
       <section class="card"><h2>Friends (${soc.friends.length})</h2>
         ${soc.friends.length ? `<ul class="ex-list">${soc.friends.map(f => `<li><span>${userBtn(f.username)}<br><small class="muted">${f.active ? "Updated " + ago(f.active) : "Hasn't synced the new version yet"}</small></span>
           <button class="icon-btn" data-action="soc-unfriend" data-u="${esc(f.username)}" aria-label="Remove ${esc(f.username)}">✕</button></li>`).join("")}</ul>` : `<p class="muted">No friends yet. Send your invite link to get started.</p>`}
@@ -1560,7 +1574,7 @@ function renderFriends(){
         ${soc.groups.length ? `<ul class="ex-list">${soc.groups.map(g => `<li><span><button class="link-btn" data-action="soc-group" data-id="${g.id}">${esc(g.name)}</button><br><small class="muted">${g.members} member${g.members === 1 ? "" : "s"}${g.owner ? " · you own it" : ""}</small></span>
           <button class="btn small" data-action="soc-group" data-id="${g.id}">Open</button></li>`).join("")}</ul>` : `<p class="muted">You're not in any groups yet. Make one for your gym crew, or join with a code.</p>`}</section>
       <section class="card"><h2>Join a group</h2>
-        <div class="row"><input id="grp-code" class="mini" style="flex:1;width:auto;text-transform:uppercase" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="12" placeholder="Group code"><button class="btn primary" data-action="grp-join">Join</button></div></section>
+        <div class="row"><input id="grp-code" class="mini" style="flex:1;width:auto;text-transform:uppercase" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="12" placeholder="Group code">${canPaste() ? `<button class="btn" data-action="soc-paste" data-for="grp-code">Paste</button>` : ""}<button class="btn primary" data-action="grp-join">Join</button></div></section>
       <section class="card"><h2>New group</h2>
         <div class="row"><input id="grp-name" class="mini" style="flex:1;width:auto" maxlength="30" placeholder="e.g. Gym Bros"><button class="btn" data-action="grp-create">Create</button></div>
         <p class="muted">Everyone in a group sees each other's shared stats and a weekly leaderboard, even if they aren't friends.</p></section>`;
@@ -1620,7 +1634,9 @@ async function socAction(a, b){
   if(a === "soc-invite") return shareInvite("friend", soc.code);
   if(a === "grp-invite") return shareInvite("group", socGroup.code, socGroup.name);
   if(a === "soc-copy"){ try { await navigator.clipboard.writeText(b.dataset.c); toast("Code copied"); } catch(e){ toast(`Your code is ${b.dataset.c}`); } return; }
-  if(a === "soc-add"){ const c = document.getElementById("soc-code")?.value || ""; if(!c.trim()) return toast("Type your friend's code.");
+  if(a === "soc-paste"){ const el = document.getElementById(b.dataset.for); if(!el) return;
+    try { const c = extractCode(await navigator.clipboard.readText()); if(!c) return toast("Nothing to paste. Copy the code first."); el.value = c; } catch(e){ toast("Couldn't paste. Tap the box and paste it yourself."); } return; }
+  if(a === "soc-add"){ const c = extractCode(document.getElementById("soc-code")?.value); if(!c) return toast("Type your friend's code.");
     const r = await socDo("/social/add", { code: c }, r => r.status === "friends" ? `You and ${r.username} are friends` : `Request sent to ${r.username}. They'll see it in Friends.`); if(r) loadSoc(); return; }
   if(a === "soc-accept"){ if(await socDo("/social/respond", { username: b.dataset.u, accept: true }, `You and ${b.dataset.u} are friends`)) loadSoc(); return; }
   if(a === "soc-decline"){ if(await socDo("/social/respond", { username: b.dataset.u, accept: false })) loadSoc(); return; }
@@ -1629,7 +1645,7 @@ async function socAction(a, b){
     if(await socDo("/social/remove", { username: b.dataset.u }, "Friend removed")){ socProfileName = null; socProfile = null; loadSoc(); render(); } return; }
   if(a === "grp-create"){ const n = document.getElementById("grp-name")?.value || ""; if(n.trim().length < 2) return toast("Give the group a name.");
     const r = await socDo("/group/create", { name: n }, "Group created. Send the invite link to your friends."); if(r){ loadSoc(); openGroup(r.id); } return; }
-  if(a === "grp-join"){ const c = document.getElementById("grp-code")?.value || ""; if(!c.trim()) return toast("Type the group code.");
+  if(a === "grp-join"){ const c = extractCode(document.getElementById("grp-code")?.value); if(!c) return toast("Type the group code.");
     const r = await socDo("/group/join", { code: c }, r => r.already ? `You're already in ${r.name}` : `You joined ${r.name}`); if(r){ loadSoc(); openGroup(r.id); } return; }
   if(a === "grp-metric"){ groupMetric = b.dataset.m; render(); return; }
   if(a === "grp-leave"){ if(!(await ask(`Leave ${socGroup.name}?${socGroup.owner && socGroup.members.length > 1 ? " Someone else will become the owner." : ""}`, "Leave", true))) return;
@@ -1945,8 +1961,12 @@ async function handleWriteError(e){
 
 /* ---------- app version & patch notes ----------
    Every update: bump APP_VERSION and add an entry at the TOP of PATCH_NOTES (see CLAUDE.md). */
-const APP_VERSION = "1.6";
+const APP_VERSION = "1.6.1";
 const PATCH_NOTES = [
+  { v: "1.6.1", date: "2026-11-18", items: [
+    "Invite messages now lead with the friend or group code, with steps for adding it in the app",
+    "Opening an invite link in the browser shows the code with a Copy button, so iPhone users can add it in the home screen app",
+    "New Paste button next to the code boxes. Paste a whole invite message and the code is picked out for you" ] },
   { v: "1.6", date: "2026-11-18", items: [
     "Friends and groups: tap the people icon at the top. You need to be signed in",
     "Add friends with your 8-letter friend code or an invite link you can send on WhatsApp or Telegram",
