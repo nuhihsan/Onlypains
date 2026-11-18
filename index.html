@@ -207,6 +207,24 @@ select,.field input,.field textarea{border:1px solid var(--line);background:var(
 .mini{width:80px;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 8px;min-height:38px;font-size:16px;font-variant-numeric:tabular-nums}
 .cmp tr.cur th,.cmp tr.cur td{color:var(--good);font-weight:700}
 details summary{cursor:pointer;min-height:32px;display:flex;align-items:center}
+.link-btn{border:0;background:none;padding:0;font:inherit;font-weight:700;color:var(--accent);cursor:pointer;text-align:left}
+.feed{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.feed-item{border:1px solid var(--line);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:4px}
+.feed-item small{font-size:13px}
+.code-box{font-size:26px;font-weight:800;letter-spacing:.12em;text-align:center;padding:10px;border:1px dashed var(--line);border-radius:10px;font-variant-numeric:tabular-nums;user-select:all}
+.share-opt{display:flex;align-items:center;gap:10px;min-height:40px;font-weight:500}
+.share-opt input{width:22px;height:22px;min-width:22px;min-height:0;padding:0;margin:0;flex:none;border-radius:4px;accent-color:var(--accent)}
+.soc-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(80px,1fr));gap:8px}
+.soc-tiles div{border:1px solid var(--line);border-radius:10px;padding:8px;display:flex;flex-direction:column;align-items:center;text-align:center}
+.soc-tiles b{font-size:20px;font-variant-numeric:tabular-nums}
+.board{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.board li{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:10px}
+.board li.me{border-color:var(--accent)}
+.board .rk{width:22px;font-weight:800;text-align:center}
+.board .nm{flex:1;min-width:0}
+.board .vl{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+#friendsBtn{position:relative}
+#friendsBtn .dot{position:absolute;top:6px;right:5px;width:9px;height:9px;border-radius:50%;background:var(--warn)}
 </style>
 </head>
 <body>
@@ -214,6 +232,7 @@ details summary{cursor:pointer;min-height:32px;display:flex;align-items:center}
   <header>
     <h1><svg viewBox="0 0 512 512" width="30" height="30" aria-hidden="true" style="vertical-align:-5px;margin-right:8px;border-radius:7px"><rect width="512" height="512" rx="112" fill="#1d55c4"/><g transform="translate(0 6)"><circle cx="176" cy="250" r="118" fill="#fff"/><circle cx="176" cy="250" r="88" fill="#1d55c4"/><circle cx="176" cy="250" r="64" fill="#fff"/><circle cx="176" cy="250" r="22" fill="#1d55c4"/><g fill="#1d55c4"><ellipse cx="176" cy="208" rx="9" ry="13"/><ellipse cx="176" cy="292" rx="9" ry="13"/><ellipse cx="134" cy="250" rx="13" ry="9"/><ellipse cx="218" cy="250" rx="13" ry="9"/></g><path fill="#fff" d="M308 132h86a86 86 0 0 1 0 172h-30v64h-56zm56 52v68h26a34 34 0 0 0 0-68z"/></g></svg>OnlyPains</h1>
     <div class="row" style="gap:6px"><span id="weekChip" class="chip info">This week: 0</span>
+      <button class="icon-btn" id="friendsBtn" data-view="friends" aria-label="Friends and groups"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 19c.6-3.2 3-5 6-5s5.4 1.8 6 5"/><circle cx="17" cy="9" r="2.4"/><path d="M16.5 14.2c2.3.2 4 1.8 4.5 4.3"/></svg><span class="dot" id="friendsDot" hidden></span></button>
       <button class="icon-btn" id="setupBtn" data-view="setup" aria-label="Setup: exercises and targets"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button></div>
   </header>
   <main id="main" aria-live="polite"></main>
@@ -1278,8 +1297,9 @@ async function syncNow(){
       more = !!res.more || Object.keys(acct.dirty).length > 0 && changes.length === 500;
     }
     syncState = "ok";
+    publishSoon();
   } catch(e){
-    if(e && e.status === 401){ acct = null; saveAcct(); syncState = "off"; toast("You were signed out. Sign in again in Setup to keep syncing."); if(view === "setup") render(); }
+    if(e && e.status === 401){ acct = null; saveAcct(); syncState = "off"; socReset(); toast("You were signed out. Sign in again in Setup to keep syncing."); if(view === "setup") render(); }
     else syncState = e && e.status === 0 ? "offline" : "error";
   }
   syncing = false; updSyncUi();
@@ -1299,6 +1319,7 @@ async function finishSignIn(r, isNew){
   const dirty = {}; for(const k of db.raw.keys()) if(k.startsWith(LOCAL_PRE)) dirty[k.slice(LOCAL_PRE.length)] = 1;
   acct = { token: r.token, username: r.username, since: 0, dirty, lastSync: 0 }; saveAcct();
   toast(isNew ? `Account created. Welcome, ${r.username}!` : `Signed in as ${r.username}`);
+  if(pendingInvite()) view = "friends";
   render(); await syncNow();
 }
 /* Sign in with Google: Google's own button gives us a signed token, the Worker checks it. */
@@ -1347,7 +1368,7 @@ async function signOut(){
   const pending = acct && Object.keys(acct.dirty).length;
   if(!(await ask(pending ? "Some changes haven't synced yet and will be lost if you sign out now. Sign out anyway?" : "Sign out? Your log stays safe in your account and is removed from this phone until you sign in again.", "Sign out", !!pending))) return;
   try { await api("/auth/logout"); } catch(e){}
-  acct = null; saveAcct(); syncState = "off";
+  acct = null; saveAcct(); syncState = "off"; socReset();
   if(db && db.raw) db.raw.clear();
   toast("Signed out"); render();
 }
@@ -1390,6 +1411,247 @@ function accountCardHtml(){
       <div class="row" style="flex-wrap:wrap"><button class="btn primary" data-action="sign-in">Sign in</button><button class="btn" data-action="sign-up">Create account</button></div>
       <p class="muted">Usernames are 3 to 20 letters, numbers or _. There's no email reset, so keep your password somewhere safe. What's already on this phone is added to your account when you sign in. <a href="privacy.html">Privacy</a></p></section>`;
 }
+
+/* ---------- friends & groups ----------
+   Your phone publishes a small summary of your stats (recent workouts and runs, PRs, streak, weekly totals).
+   Friends and group-mates see that summary, never your full log, and only the parts you share (Friends > What friends can see).
+   Food is never shared. */
+let soc = null, socFeed = null, socTab = "feed", socBusy = false, socErr = null;
+let socProfileName = null, socProfile = null, socGroupId = null, socGroup = null, groupMetric = "s";
+let pubTimer = null;
+const INVITE_KEY = "onlypains-invite";
+const appLink = () => location.href.split("#")[0];
+function socReset(){ soc = socFeed = socProfile = socGroup = socErr = null; socProfileName = socGroupId = null; socTab = "feed"; }
+function buildPublic(){
+  const vol = s => (s.entries || []).reduce((b, e) => b + e.sets.reduce((c, x) => c + num(x.kg) * num(x.reps), 0), 0);
+  const dated = sessions.filter(s => s.date);
+  const asc = dated.slice().sort((a, b) => a.date.localeCompare(b.date) || (a.ts || 0) - (b.ts || 0));
+  const best = new Map(), prs = new Map();
+  for(const s of asc){ const pr = [];
+    for(const e of s.entries || []){ const t = topSet(e); if(!t) continue; const v = e1rm(num(t.kg), num(t.reps)); if(!(v > 0)) continue;
+      const k = e.name.toLowerCase(), prev = best.get(k);
+      if(prev && v > prev.v + 0.01) pr.push({ name: e.name.slice(0, 40), kg: num(t.kg), reps: num(t.reps) });
+      if(!prev || v > prev.v) best.set(k, { v, name: e.name.slice(0, 40), kg: num(t.kg), reps: num(t.reps), date: s.date }); }
+    if(pr.length) prs.set(s.id, pr.slice(0, 3)); }
+  const recent = dated.slice().sort((a, b) => b.date.localeCompare(a.date) || (b.ts || 0) - (a.ts || 0)).slice(0, 12).map(s => {
+    const tops = (s.entries || []).map(e => ({ e, t: topSet(e) })).filter(x => x.t).sort((a, b) => e1rm(num(b.t.kg), num(b.t.reps)) - e1rm(num(a.t.kg), num(a.t.reps)));
+    return { date: s.date, ts: s.ts || 0, name: String(s.splitName || s.split || "Workout").slice(0, 40), ex: (s.entries || []).length,
+      sets: (s.entries || []).reduce((a, e) => a + e.sets.length, 0), vol: Math.round(vol(s)),
+      top: tops.slice(0, 2).map(x => ({ name: x.e.name.slice(0, 40), kg: num(x.t.kg), reps: num(x.t.reps) })), prs: prs.get(s.id) || [] }; });
+  const weeks = {}, thisW = mondayStr();
+  for(let i = 0; i < 8; i++) weeks[addDays(thisW, -7 * i)] = { s: 0, vol: 0, km: 0 };
+  for(const s of dated){ const w = weeks[mondayOf(s.date)]; if(w){ w.s++; w.vol += Math.round(vol(s)); } }
+  for(const r of runs){ const w = r.date && weeks[mondayOf(r.date)]; if(w) w.km = Math.round((w.km + num(r.distanceKm)) * 10) / 10; }
+  const st = streaks(), wm = measures.find(m => m.weight > 0);
+  return { v: 1, streak: { cur: st.cur, best: st.best, thisWeek: st.thisWeek, min: cfg.weekMin },
+    totals: { sessions: sessions.length, volume: Math.round(totalVolume(sessions)), runKm: Math.round(sumKm(runs) * 10) / 10 },
+    lifts: { recent, best: [...best.values()].sort((a, b) => b.v - a.v).slice(0, 12).map(b => ({ name: b.name, kg: b.kg, reps: b.reps, date: b.date })) },
+    runs: { recent: runs.slice(0, 10).map(r => ({ date: r.date, ts: r.startTs || 0, km: r.distanceKm, sec: r.durationSec, hr: r.avgHr || null, name: String(r.name || "").slice(0, 40) })) },
+    body: wm ? { weight: wm.weight, date: wm.date } : null, weeks };
+}
+function publishSoon(ms){ clearTimeout(pubTimer); pubTimer = setTimeout(publishNow, ms == null ? 3000 : ms); }
+async function publishNow(){
+  if(!acct || !gotSessions || !WORKER_URL || Object.keys(acct.dirty || {}).length) return;
+  const sum = buildPublic(), key = JSON.stringify(sum);
+  if(key === acct.pubKey) return;
+  try { await api("/social/publish", { summary: Object.assign({ at: Date.now() }, sum) }); if(acct){ acct.pubKey = key; saveAcct(); } } catch(e){}
+}
+async function loadSoc(){
+  if(!acct || socBusy) return;
+  socBusy = true; socErr = null;
+  try {
+    const [me, feed] = await Promise.all([api("/social/me"), api("/social/feed", { from: addDays(todayStr(), -21) })]);
+    soc = me; socFeed = feed.items || [];
+  } catch(e){ socErr = e.error || "Couldn't load friends."; }
+  socBusy = false;
+  if(view === "friends" && !document.activeElement?.matches?.("input")) render();
+  if(soc) takeInviteNow();
+}
+async function socDo(route, body, okMsg){
+  try { const r = await api(route, body); if(okMsg) toast(typeof okMsg === "function" ? okMsg(r) : okMsg); return r; }
+  catch(e){ toast(e.error || "Something went wrong."); if(e.status === 401){ acct = null; saveAcct(); socReset(); render(); } return null; }
+}
+async function openProfile(u){
+  socProfileName = u; socProfile = null; render(); window.scrollTo(0, 0);
+  const r = await socDo("/social/profile", { username: u });
+  if(socProfileName !== u) return;
+  if(!r){ socProfileName = null; } else socProfile = r;
+  render();
+}
+async function openGroup(id){
+  socGroupId = id; socGroup = null; render(); window.scrollTo(0, 0);
+  const r = await socDo("/group/view", { id, week: mondayStr() });
+  if(socGroupId !== id) return;
+  if(!r){ socGroupId = null; } else socGroup = r;
+  render();
+}
+async function shareInvite(kind, code, name){
+  const url = appLink() + "#" + (kind === "group" ? "join" : "add") + "=" + code;
+  const text = kind === "group" ? `Join my OnlyPains group "${name}": ${url}` : `Add me on OnlyPains (code ${code}): ${url}`;
+  try { if(navigator.share){ await navigator.share({ title: "OnlyPains", text }); return; } } catch(e){ if(e && e.name === "AbortError") return; }
+  try { await navigator.clipboard.writeText(text); toast("Invite copied. Paste it into WhatsApp or Telegram."); }
+  catch(e){ toast(`Send them this code: ${code}`); }
+}
+// invite links: ...#add=CODE (friend) or #join=CODE (group). Kept until you're signed in.
+function takeInvite(){
+  const m = location.hash.match(/^#(add|join)=([A-Za-z0-9]{6,12})$/);
+  if(!m) return;
+  try { history.replaceState(null, "", location.pathname + location.search); } catch(e){ location.hash = ""; }
+  try { localStorage.setItem(INVITE_KEY, JSON.stringify({ kind: m[1], code: m[2].toUpperCase() })); } catch(e){}
+  view = "friends"; socTab = m[1] === "join" ? "groups" : "friends";
+}
+function pendingInvite(){ try { return JSON.parse(localStorage.getItem(INVITE_KEY)) || null; } catch(e){ return null; } }
+async function takeInviteNow(){
+  const inv = pendingInvite(); if(!inv || !acct) return;
+  try { localStorage.removeItem(INVITE_KEY); } catch(e){}
+  if(inv.kind === "join"){ const r = await socDo("/group/join", { code: inv.code }, r => r.already ? `You're already in ${r.name}` : `You joined ${r.name}`); if(r){ socTab = "groups"; await loadSoc(); } }
+  else { const r = await socDo("/social/add", { code: inv.code }, r => r.status === "friends" ? `You and ${r.username} are friends` : `Friend request sent to ${r.username}`); if(r){ socTab = "friends"; await loadSoc(); } }
+}
+function socSeg(){
+  return `<div class="seg" role="group" aria-label="Friends views">${[["feed","Feed"],["friends","Friends"],["groups","Groups"]].map(([k,l]) => `<button class="${socTab === k ? "on" : ""}" data-action="soc-tab" data-t="${k}" aria-pressed="${socTab === k}">${l}${k === "friends" && soc && soc.incoming.length ? ` (${soc.incoming.length})` : ""}</button>`).join("")}</div>`;
+}
+const userBtn = u => `<button class="link-btn" data-action="soc-user" data-u="${esc(u)}">${esc(u)}</button>`;
+const liftTxt = x => `${esc(x.name)} ${kg(x.kg)} kg x ${esc(x.reps)}`;
+function feedItemHtml(it){
+  const who = it.self ? `<b>You</b>` : userBtn(it.user), when = it.date === todayStr() ? "today" : esc(fmtDate(it.date));
+  if(it.kind === "run") return `<li class="feed-item"><div class="row between"><span>${who} ran</span><small class="muted">${when}</small></div>
+    <div><b>${kg(it.km)} km</b> · ${fmtDur(it.sec)} · ${fmtPace(it.sec / it.km)} /km${it.hr ? ` · HR ${esc(it.hr)}` : ""}</div>${it.name ? `<small class="muted">${esc(it.name)}</small>` : ""}</li>`;
+  return `<li class="feed-item"><div class="row between"><span>${who} trained ${esc(it.name)}</span><small class="muted">${when}</small></div>
+    <div class="muted">${esc(it.ex)} exercises · ${esc(it.sets)} sets · ${Math.round(num(it.vol)).toLocaleString()} kg</div>
+    ${(it.top || []).length ? `<small>Top: ${it.top.map(liftTxt).join(", ")}</small>` : ""}
+    ${(it.prs || []).length ? `<div class="chips">${it.prs.map(p => `<span class="chip good">PR ${liftTxt(p)}</span>`).join("")}</div>` : ""}</li>`;
+}
+function renderFriends(){
+  if(!WORKER_URL || storageMode !== "local") return `<section class="card"><h2>Friends</h2><p class="muted">Friends and groups work in the online version of OnlyPains.</p></section>`;
+  const inv = pendingInvite();
+  if(!acct) return `<section class="card"><h2>Friends and groups</h2>
+    ${inv ? `<p><b>You've been invited${inv.kind === "join" ? " to a group" : " to be friends"}.</b> Sign in first and it will be added automatically.</p>` : ""}
+    <p class="muted">Add friends with a code, make a group with your gym crew, and see each other's workouts, PRs, runs and streaks. You choose what friends can see, and your food log is never shared.</p>
+    <button class="btn primary" data-view="setup">Sign in under Account</button></section>`;
+  if(socProfileName) return renderSocProfile();
+  if(socGroupId) return renderSocGroup();
+  if(!soc) return `${socSeg()}<section class="card"><p class="muted">${socErr ? esc(socErr) : "Loading…"}</p>${socErr ? `<button class="btn" data-action="soc-refresh">Try again</button>` : ""}</section>`;
+  let body = "";
+  if(socTab === "feed"){
+    body = `<section class="card"><div class="row between"><h2>Feed</h2><button class="btn small" data-action="soc-refresh">${socBusy ? "Loading…" : "Refresh"}</button></div>
+      ${socFeed && socFeed.length ? `<ul class="feed">${socFeed.map(feedItemHtml).join("")}</ul><p class="muted">Last 3 weeks of workouts and runs from you, your friends and your groups.</p>`
+        : `<p class="muted">Nothing here yet. Add friends or join a group, and their workouts and runs show up here.</p><button class="btn" data-action="soc-tab" data-t="friends">Add a friend</button>`}</section>`;
+  } else if(socTab === "friends"){
+    const sh = soc.share || {};
+    body = `${soc.incoming.length ? `<section class="card"><h2>Friend requests</h2><ul class="ex-list">${soc.incoming.map(u => `<li><span>${esc(u)}</span>
+        <button class="btn small primary" data-action="soc-accept" data-u="${esc(u)}">Accept</button><button class="icon-btn" data-action="soc-decline" data-u="${esc(u)}" aria-label="Decline ${esc(u)}">Decline</button></li>`).join("")}</ul></section>` : ""}
+      <section class="card"><h2>Your friend code</h2>
+        <div class="code-box">${esc(soc.code)}</div>
+        <div class="row" style="flex-wrap:wrap"><button class="btn primary" data-action="soc-invite">Send invite link</button><button class="btn" data-action="soc-copy" data-c="${esc(soc.code)}">Copy code</button></div>
+        <p class="muted">Friends tap your link or type your code. You'll both see each other once they're added.</p></section>
+      <section class="card"><h2>Add a friend</h2>
+        <div class="row"><input id="soc-code" class="mini" style="flex:1;width:auto;text-transform:uppercase" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="12" placeholder="Their 8-letter code"><button class="btn primary" data-action="soc-add">Add</button></div></section>
+      <section class="card"><h2>Friends (${soc.friends.length})</h2>
+        ${soc.friends.length ? `<ul class="ex-list">${soc.friends.map(f => `<li><span>${userBtn(f.username)}<br><small class="muted">${f.active ? "Updated " + ago(f.active) : "Hasn't synced the new version yet"}</small></span>
+          <button class="icon-btn" data-action="soc-unfriend" data-u="${esc(f.username)}" aria-label="Remove ${esc(f.username)}">✕</button></li>`).join("")}</ul>` : `<p class="muted">No friends yet. Send your invite link to get started.</p>`}
+        ${soc.outgoing.length ? `<p class="muted" style="margin:0">Waiting for them to accept:</p><ul class="ex-list">${soc.outgoing.map(u => `<li><span>${esc(u)}</span><button class="icon-btn" data-action="soc-cancel" data-u="${esc(u)}">Cancel</button></li>`).join("")}</ul>` : ""}</section>
+      <section class="card"><h2>What friends can see</h2>
+        <label class="share-opt"><input type="checkbox" id="sh-lifts" ${sh.lifts ? "checked" : ""}> Workouts, PRs, volume and streak</label>
+        <label class="share-opt"><input type="checkbox" id="sh-runs" ${sh.runs ? "checked" : ""}> Runs</label>
+        <label class="share-opt"><input type="checkbox" id="sh-body" ${sh.body ? "checked" : ""}> Body weight</label>
+        <p class="muted">This covers your friends and everyone in your groups. Your food log, measurements other than weight and notes are never shared.</p></section>`;
+  } else {
+    body = `<section class="card"><h2>Your groups</h2>
+        ${soc.groups.length ? `<ul class="ex-list">${soc.groups.map(g => `<li><span><button class="link-btn" data-action="soc-group" data-id="${g.id}">${esc(g.name)}</button><br><small class="muted">${g.members} member${g.members === 1 ? "" : "s"}${g.owner ? " · you own it" : ""}</small></span>
+          <button class="btn small" data-action="soc-group" data-id="${g.id}">Open</button></li>`).join("")}</ul>` : `<p class="muted">You're not in any groups yet. Make one for your gym crew, or join with a code.</p>`}</section>
+      <section class="card"><h2>Join a group</h2>
+        <div class="row"><input id="grp-code" class="mini" style="flex:1;width:auto;text-transform:uppercase" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="12" placeholder="Group code"><button class="btn primary" data-action="grp-join">Join</button></div></section>
+      <section class="card"><h2>New group</h2>
+        <div class="row"><input id="grp-name" class="mini" style="flex:1;width:auto" maxlength="30" placeholder="e.g. Gym Bros"><button class="btn" data-action="grp-create">Create</button></div>
+        <p class="muted">Everyone in a group sees each other's shared stats and a weekly leaderboard, even if they aren't friends.</p></section>`;
+  }
+  return socSeg() + body;
+}
+function renderSocProfile(){
+  const back = `<button class="btn small" data-action="soc-back" style="align-self:flex-start">← Back</button>`;
+  if(!socProfile) return `${back}<section class="card"><h2>${esc(socProfileName)}</h2><p class="muted">Loading…</p></section>`;
+  const p = socProfile, s = p.summary;
+  if(!s) return `${back}<section class="card"><h2>${esc(p.username)}</h2><p class="muted">${esc(p.username)} hasn't synced the latest version of OnlyPains yet. Their stats show up once they open the app while signed in.</p>${p.friend ? `<button class="btn danger" data-action="soc-unfriend" data-u="${esc(p.username)}">Remove friend</button>` : ""}</section>`;
+  const L = s.lifts, R = s.runs, st = s.streak, wk = (s.weeks || {})[mondayStr()] || {};
+  const tiles = [
+    st && [st.cur + "w", "streak"], st && [st.thisWeek, "this week"], s.totals.sessions != null && [s.totals.sessions, "workouts"],
+    s.totals.runKm != null && [kg(s.totals.runKm), "km run"], wk.km != null && [kg(wk.km), "km this week"]].filter(Boolean);
+  return `${back}
+    <section class="card"><div class="row between"><h2>${esc(p.username)}${p.self ? " (you)" : ""}</h2>${p.friend ? `<span class="chip good">Friend</span>` : p.self ? "" : `<span class="chip info">Group</span>`}</div>
+      ${tiles.length ? `<div class="soc-tiles">${tiles.map(([v, l]) => `<div><b>${esc(v)}</b><small class="muted">${l}</small></div>`).join("")}</div>` : ""}
+      ${st ? `<p class="muted" style="margin:0">Best streak ${esc(st.best)} weeks · aims for ${esc(st.min)}+ sessions a week</p>` : ""}
+      <small class="muted">Updated ${ago(s.at)}</small></section>
+    ${L && L.best && L.best.length ? `<section class="card"><h2>Best lifts</h2><ul class="ex-list">${L.best.slice(0, 8).map(b => `<li><span>${esc(b.name)}</span><small class="muted" style="padding-right:10px">${kg(b.kg)} kg x ${esc(b.reps)}</small></li>`).join("")}</ul></section>` : ""}
+    ${L && L.recent && L.recent.length ? `<section class="card"><h2>Recent workouts</h2><ul class="feed">${L.recent.slice(0, 5).map(w => feedItemHtml(Object.assign({ kind: "lift", user: p.username, self: true }, w)).replace("<b>You</b> trained", "")).join("")}</ul></section>` : ""}
+    ${R && R.recent && R.recent.length ? `<section class="card"><h2>Recent runs</h2><ul class="feed">${R.recent.slice(0, 5).map(w => feedItemHtml(Object.assign({ kind: "run", user: p.username, self: true }, w)).replace("<b>You</b> ran", "Run")).join("")}</ul></section>` : ""}
+    ${s.body && s.body.weight ? `<section class="card"><h2>Body weight</h2><p><b>${kg(s.body.weight)} kg</b> <span class="muted">· ${esc(fmtDate(s.body.date))}</span></p></section>` : ""}
+    ${!L && !R && !p.self ? `<section class="card"><p class="muted">${esc(p.username)} isn't sharing workouts or runs right now.</p></section>` : ""}
+    ${p.friend ? `<button class="btn danger" data-action="soc-unfriend" data-u="${esc(p.username)}">Remove friend</button>` : ""}`;
+}
+function renderSocGroup(){
+  const back = `<button class="btn small" data-action="soc-back" style="align-self:flex-start">← Back</button>`;
+  if(!socGroup) return `${back}<section class="card"><p class="muted">Loading…</p></section>`;
+  const g = socGroup, M = { s: ["Workouts", v => v], vol: ["Volume", v => Math.round(v).toLocaleString() + " kg"], km: ["Km run", v => kg(v) + " km"] };
+  const val = m => m.week && m.week[groupMetric] != null ? num(m.week[groupMetric]) : null;
+  const ranked = g.members.slice().sort((a, b) => (val(b) ?? -1) - (val(a) ?? -1));
+  let rank = 0;
+  return `${back}
+    <section class="card"><div class="row between"><h2>${esc(g.name)}</h2><span class="chip info">${g.members.length} member${g.members.length === 1 ? "" : "s"}</span></div>
+      <p class="muted" style="margin:0">Invite code</p><div class="code-box">${esc(g.code)}</div>
+      <button class="btn primary" data-action="grp-invite">Send invite link</button></section>
+    <section class="card"><h2>This week</h2>
+      <div class="seg" role="group" aria-label="Leaderboard">${Object.entries(M).map(([k, [l]]) => `<button class="${groupMetric === k ? "on" : ""}" data-action="grp-metric" data-m="${k}" aria-pressed="${groupMetric === k}">${l}</button>`).join("")}</div>
+      <ol class="board">${ranked.map(m => { const v = val(m); if(v != null) rank++;
+        return `<li class="${m.self ? "me" : ""}"><span class="rk">${v != null ? rank : "–"}</span><span class="nm">${m.self ? "<b>You</b>" : userBtn(m.username)}${m.owner ? ` <small class="muted">owner</small>` : ""}${m.streak ? `<br><small class="muted">${esc(m.streak)}-week streak</small>` : ""}</span>
+          <span class="vl">${v != null ? M[groupMetric][1](v) : `<small class="muted">${!m.published ? "not synced yet" : "hidden"}</small>`}</span></li>`; }).join("")}</ol>
+      <p class="muted">Resets every Monday. "Hidden" means that person doesn't share this.</p></section>
+    ${g.owner ? `<section class="card"><h2>Manage</h2>
+      <ul class="ex-list">${g.members.filter(m => !m.self).map(m => `<li><span>${esc(m.username)}</span><button class="icon-btn" data-action="grp-kick" data-u="${esc(m.username)}" aria-label="Remove ${esc(m.username)}">Remove</button></li>`).join("") || `<li><span class="muted">No one else yet</span></li>`}</ul>
+      <div class="row" style="flex-wrap:wrap"><button class="btn" data-action="grp-rename">Rename</button><button class="btn" data-action="grp-newcode">New invite code</button></div>
+      <p class="muted">A new code stops the old link from working. People already in the group stay.</p></section>` : ""}
+    <button class="btn danger" data-action="grp-leave">Leave group</button>`;
+}
+async function socAction(a, b){
+  if(a === "soc-tab"){ socTab = b.dataset.t; render(); return; }
+  if(a === "soc-refresh"){ publishNow(); loadSoc(); render(); return; }
+  if(a === "soc-back"){ const back = socGroupId && socProfileName ? "profile" : null; if(back){ socProfileName = null; socProfile = null; } else { socProfileName = socGroupId = null; socProfile = socGroup = null; } render(); window.scrollTo(0, 0); return; }
+  if(a === "soc-user") return openProfile(b.dataset.u);
+  if(a === "soc-group") return openGroup(+b.dataset.id);
+  if(a === "soc-invite") return shareInvite("friend", soc.code);
+  if(a === "grp-invite") return shareInvite("group", socGroup.code, socGroup.name);
+  if(a === "soc-copy"){ try { await navigator.clipboard.writeText(b.dataset.c); toast("Code copied"); } catch(e){ toast(`Your code is ${b.dataset.c}`); } return; }
+  if(a === "soc-add"){ const c = document.getElementById("soc-code")?.value || ""; if(!c.trim()) return toast("Type your friend's code.");
+    const r = await socDo("/social/add", { code: c }, r => r.status === "friends" ? `You and ${r.username} are friends` : `Request sent to ${r.username}. They'll see it in Friends.`); if(r) loadSoc(); return; }
+  if(a === "soc-accept"){ if(await socDo("/social/respond", { username: b.dataset.u, accept: true }, `You and ${b.dataset.u} are friends`)) loadSoc(); return; }
+  if(a === "soc-decline"){ if(await socDo("/social/respond", { username: b.dataset.u, accept: false })) loadSoc(); return; }
+  if(a === "soc-cancel"){ if(await socDo("/social/remove", { username: b.dataset.u }, "Request cancelled")) loadSoc(); return; }
+  if(a === "soc-unfriend"){ if(!(await ask(`Remove ${b.dataset.u} as a friend? You'll stop seeing each other unless you share a group.`, "Remove", true))) return;
+    if(await socDo("/social/remove", { username: b.dataset.u }, "Friend removed")){ socProfileName = null; socProfile = null; loadSoc(); render(); } return; }
+  if(a === "grp-create"){ const n = document.getElementById("grp-name")?.value || ""; if(n.trim().length < 2) return toast("Give the group a name.");
+    const r = await socDo("/group/create", { name: n }, "Group created. Send the invite link to your friends."); if(r){ loadSoc(); openGroup(r.id); } return; }
+  if(a === "grp-join"){ const c = document.getElementById("grp-code")?.value || ""; if(!c.trim()) return toast("Type the group code.");
+    const r = await socDo("/group/join", { code: c }, r => r.already ? `You're already in ${r.name}` : `You joined ${r.name}`); if(r){ loadSoc(); openGroup(r.id); } return; }
+  if(a === "grp-metric"){ groupMetric = b.dataset.m; render(); return; }
+  if(a === "grp-leave"){ if(!(await ask(`Leave ${socGroup.name}?${socGroup.owner && socGroup.members.length > 1 ? " Someone else will become the owner." : ""}`, "Leave", true))) return;
+    if(await socDo("/group/leave", { id: socGroupId }, "You left the group")){ socGroupId = null; socGroup = null; socTab = "groups"; loadSoc(); render(); } return; }
+  if(a === "grp-kick"){ if(!(await ask(`Remove ${b.dataset.u} from ${socGroup.name}?`, "Remove", true))) return;
+    if(await socDo("/group/kick", { id: socGroupId, username: b.dataset.u }, "Removed")) openGroup(socGroupId); return; }
+  if(a === "grp-newcode"){ if(!(await ask("Make a new invite code? The old link and code will stop working.", "New code"))) return;
+    if(await socDo("/group/newcode", { id: socGroupId }, "New code made")) openGroup(socGroupId); return; }
+  if(a === "grp-rename"){ const n = prompt("New group name", socGroup.name); if(!n || n.trim().length < 2) return;
+    if(await socDo("/group/rename", { id: socGroupId, name: n }, "Renamed")){ loadSoc(); openGroup(socGroupId); } return; }
+}
+document.addEventListener("change", async ev => {
+  const t = ev.target; if(!t || !/^sh-(lifts|runs|body)$/.test(t.id) || !soc) return;
+  const next = { lifts: !!document.getElementById("sh-lifts")?.checked, runs: !!document.getElementById("sh-runs")?.checked, body: !!document.getElementById("sh-body")?.checked };
+  const r = await socDo("/social/share", next, "Saved");
+  if(r) soc.share = r.share; else { t.checked = !t.checked; }
+});
+document.addEventListener("keydown", ev => {
+  if(ev.key !== "Enter") return;
+  const id = ev.target && ev.target.id, a = id === "soc-code" ? "soc-add" : id === "grp-code" ? "grp-join" : id === "grp-name" ? "grp-create" : null;
+  if(a){ ev.preventDefault(); document.querySelector(`[data-action="${a}"]`)?.click(); }
+});
 
 /* ---------- backup & restore ---------- */
 function stripId(o){ const c = clone(o); delete c.id; return c; }
@@ -1683,8 +1945,15 @@ async function handleWriteError(e){
 
 /* ---------- app version & patch notes ----------
    Every update: bump APP_VERSION and add an entry at the TOP of PATCH_NOTES (see CLAUDE.md). */
-const APP_VERSION = "1.5.1";
+const APP_VERSION = "1.6";
 const PATCH_NOTES = [
+  { v: "1.6", date: "2026-11-18", items: [
+    "Friends and groups: tap the people icon at the top. You need to be signed in",
+    "Add friends with your 8-letter friend code or an invite link you can send on WhatsApp or Telegram",
+    "Feed: see your friends' workouts, PRs and runs from the last 3 weeks",
+    "Tap a friend to see their streak, best lifts, recent workouts and runs",
+    "Groups: make one for your gym crew and get a weekly leaderboard for workouts, volume and km run",
+    "You choose what friends can see: workouts, runs and body weight each have their own switch. Your food log is never shared" ] },
   { v: "1.5.1", date: "2026-11-17", items: [
     "Sign in with Google now opens on the same page instead of a popup, so it works on iPhone and the home screen app",
     "Google button no longer shows a white box in dark mode",
@@ -2031,25 +2300,29 @@ function hubSeg(){
 }
 function render(){
   const main = document.getElementById("main");
-  main.innerHTML = view === "log" ? renderLog() : view === "history" ? renderHistory() : view === "progress" ? renderProgress() : view === "body" ? renderBody() : view === "run" ? renderRun() : view === "compare" ? renderCompare() : view === "food" ? renderFood() : view === "feedback" ? renderFeedback() : view === "pick" && pick ? renderPick() : renderSetup();
+  main.innerHTML = view === "log" ? renderLog() : view === "history" ? renderHistory() : view === "progress" ? renderProgress() : view === "body" ? renderBody() : view === "run" ? renderRun() : view === "compare" ? renderCompare() : view === "food" ? renderFood() : view === "feedback" ? renderFeedback() : view === "friends" ? renderFriends() : view === "pick" && pick ? renderPick() : renderSetup();
   if(view === "progress" || view === "compare" || view === "history") main.insertAdjacentHTML("afterbegin", hubSeg());
   const navView = view === "history" || view === "compare" ? "progress" : view === "pick" ? (pick && pick.mode === "template" ? "setup" : "log") : view;
   document.querySelectorAll("[data-view]").forEach(b => b.setAttribute("aria-current", b.dataset.view === navView ? "page" : "false"));
   document.getElementById("finishBar").hidden = !(view === "log" && draft);
   renderWeekChip();
   if(view === "setup") mountGoogle();
+  if(view === "friends" && acct && !soc && !socBusy && !socErr) loadSoc();
+  const dot = document.getElementById("friendsDot"); if(dot) dot.hidden = !(soc && soc.incoming.length);
 }
 
 /* ---------- events ---------- */
 function setEl(ei, si){ return document.querySelector(`.set[data-e="${ei}"][data-s="${si}"]`); }
 document.addEventListener("click", async ev => {
   const nb = ev.target.closest("[data-view]");
-  if(nb){ if(view === "feedback") fbSync(); if(view === "setup" && nb.dataset.view !== "setup") setupDraft = null; view = nb.dataset.view; render(); window.scrollTo(0,0); return; }
+  if(nb){ if(view === "feedback") fbSync();
+    if(nb.dataset.view === "friends"){ socProfileName = socGroupId = null; socProfile = socGroup = null; socErr = null; if(acct && soc){ loadSoc(); publishNow(); } } if(view === "setup" && nb.dataset.view !== "setup") setupDraft = null; view = nb.dataset.view; render(); window.scrollTo(0,0); return; }
   const b = ev.target.closest("[data-action]"); if(!b) return;
   const a = b.dataset.action;
   const row = b.closest(".set");
   const ei = row ? +row.dataset.e : +b.dataset.e, si = row ? +row.dataset.s : null;
 
+  if(a.startsWith("soc-") || a.startsWith("grp-")) return socAction(a, b);
   if(a === "sign-in") return signIn("login");
   if(a === "sign-up") return signIn("signup");
   if(a === "sign-out") return signOut();
@@ -2234,7 +2507,10 @@ if("serviceWorker" in navigator && location.protocol === "https:" && !window.cla
   }
   draft = loadDraftLocal();
   if(storageMode === "local" && WORKER_URL){
+    takeInvite();
     takeGoogleReturn();
+    // invite link opened while the app is already open
+    window.addEventListener("hashchange", () => { if(!/^#(add|join)=/.test(location.hash)) return; takeInvite(); socProfileName = socGroupId = null; if(acct && soc) takeInviteNow(); render(); });
     if(acct) syncNow();
     document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible") scheduleSync(200); });
     window.addEventListener("online", () => scheduleSync(200));

@@ -4,6 +4,7 @@
 
 - **Accounts:** sign in with Google, or with a username and password (stored only as salted PBKDF2 hashes). One account can have both.
 - **Cloud sync:** keeps each user's log in the D1 database `onlypains`, so data survives deleting the app or changing phones.
+- **Friends and groups:** friend codes and requests, groups with invite codes, a feed and a weekly leaderboard. Each phone publishes a small summary of its own stats, and the Worker only hands it to that person's friends and group-mates, with whatever they've switched off removed. The tables for this are created automatically the first time someone opens Friends.
 - **Feedback:** forwards the Feedback tab to Telegram through your bot, tagged with the sender's username and app version.
 
 ## Set up (one time)
@@ -26,6 +27,10 @@ The D1 database `onlypains` and its tables already exist (`schema.sql` has the t
 On the iPhone home screen app, Google's sign-in window can fail to open. Users can sign in with Google once in Safari, add a password under Setup > Account, and use that password in the home screen app.
 
 Only requests from `https://nuhihsan.github.io` are accepted. If you move the app, add the new address to `ALLOWED_ORIGINS`.
+
+## Updating the Worker
+
+When `onlypains-worker.js` changes, repeat step 1 above (Edit code, paste, Deploy). Deploy the Worker **before** merging the app change that needs it, so the app never calls routes that aren't there yet.
 
 ## Looking after it
 

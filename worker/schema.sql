@@ -7,3 +7,11 @@ CREATE TABLE IF NOT EXISTS login_fails (username TEXT PRIMARY KEY, n INTEGER NOT
 ALTER TABLE users ADD COLUMN google_sub TEXT;
 ALTER TABLE users ADD COLUMN email TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS users_google ON users(google_sub);
+-- friends and groups (the Worker also creates these itself on first use)
+CREATE TABLE IF NOT EXISTS social (user_id INTEGER PRIMARY KEY, code TEXT NOT NULL UNIQUE, share TEXT NOT NULL DEFAULT '{}', summary TEXT, pub INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS friend_reqs (from_id INTEGER NOT NULL, to_id INTEGER NOT NULL, created INTEGER NOT NULL, PRIMARY KEY (from_id, to_id));
+CREATE INDEX IF NOT EXISTS friend_reqs_to ON friend_reqs(to_id);
+CREATE TABLE IF NOT EXISTS friends (a INTEGER NOT NULL, b INTEGER NOT NULL, created INTEGER NOT NULL, PRIMARY KEY (a, b));
+CREATE TABLE IF NOT EXISTS grp (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, code TEXT NOT NULL UNIQUE, owner INTEGER NOT NULL, created INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS grp_members (grp_id INTEGER NOT NULL, user_id INTEGER NOT NULL, joined INTEGER NOT NULL, PRIMARY KEY (grp_id, user_id));
+CREATE INDEX IF NOT EXISTS grp_members_user ON grp_members(user_id);

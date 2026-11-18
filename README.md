@@ -9,6 +9,7 @@ A phone-first web app for logging gym splits, runs, food and body measurements. 
 - **Run:** manual entry or import from Strava (GPX or `activities.csv`) and Garmin (TCX). Shows distance, pace, heart rate, cadence, weekly km and pace trend.
 - **Food:** type what you ate ("2 roti canai, teh tarik") and calories and protein are estimated from a built-in list of about 180 Malaysian and gym foods. Foods you add yourself are remembered.
 - **Progress:** tappable lift charts (top set, est. 1RM or volume over 1M to All, with trend line), hard sets per muscle vs your target, sets and volume per week, personal records, milestones, this period vs last, workout vs workout, run vs run.
+- **Friends and groups:** add friends with a code or invite link, make groups for your gym crew, see a feed of each other's workouts, PRs and runs, open a friend's profile, and compete on a weekly group leaderboard. You choose what friends can see; food is never shared. Needs an account.
 - **Versions:** the app shows its version and patch notes in Setup, and a "What's new" card after each update.
 - **Body:** weight, height, waist, body fat, BMI (Asian cut-offs), plus the details used to suggest daily calories (Mifflin-St Jeor) and protein by goal.
 
@@ -16,7 +17,7 @@ A phone-first web app for logging gym splits, runs, food and body measurements. 
 
 Everything is saved in your browser on your own device (`localStorage`), so the app works offline. Sign in under **Setup > Account** to back your log up to the cloud (a Cloudflare Worker and D1 database, see `worker/README.md`) and use it on any device. Without an account, use **Setup > Your data > Download backup** now and then.
 
-Each friend who opens the link gets their own separate, private log on their own phone.
+Each friend who opens the link gets their own separate, private log on their own phone. If you add each other as friends (or join the same group), you see a summary of each other's stats: recent workouts, PRs, streak, runs and weekly totals, and body weight only if that person switches it on. Nobody sees your full log or your food.
 
 ## Hosting on GitHub Pages
 
