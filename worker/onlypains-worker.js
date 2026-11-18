@@ -22,7 +22,7 @@
 //   POST /group/...       Bearer token. Create, join, view and leave groups
 //   POST /social/notifs   Bearer token. Your notifications (friend requests, accepted, declined, group joins)
 //   POST /push/...        Bearer token. Phone notifications: key, subscribe, unsubscribe
-//   POST /social/5ha      Bearer token. Give or take back a 5HA (kudos) on a friend's workout, run or achievement
+//   POST /social/5ha      Bearer token. Give or take back a 5Ha! (kudos) on a friend's workout, run or achievement
 //   POST /social/avatar   Bearer token. Set or remove your profile photo
 //   GET  /a/<key>         A profile photo. The key is random and only handed to friends and group-mates
 //
@@ -440,7 +440,7 @@ async function social(path, b, who, env, reply, ctx){
     }
     items.sort((x, y) => String(y.date).localeCompare(String(x.date)) || (y.ts || 0) - (x.ts || 0));
     const top = items.slice(0, 80);
-    // 5HA counts, who gave them, and whether you did
+    // 5Ha! counts, who gave them, and whether you did
     const owners = [...new Set(top.map(i => idOf[i.user]))], k5 = {};
     for (let i = 0; i < owners.length; i += 90) {
       const part = owners.slice(i, i + 90);
@@ -470,8 +470,8 @@ async function social(path, b, who, env, reply, ctx){
   if (path === "/social/5ha") {
     const u = await userByName(b.user, env), item = String(b.item || "");
     if (!u || !/^[lra]:[A-Za-z0-9_:.\-]{1,60}$/.test(item)) return bad("Can't find that.");
-    if (u.id === me) return bad("You can't 5HA yourself.");
-    if (!(await canSee(me, u.id, env))) return reply(404, { ok: false, error: "You can only 5HA friends and people in your groups." });
+    if (u.id === me) return bad("You can't give yourself a 5Ha!");
+    if (!(await canSee(me, u.id, env))) return reply(404, { ok: false, error: "You can only give a 5Ha! to friends and people in your groups." });
     if (b.on) {
       const ins = await env.DB.prepare("INSERT OR IGNORE INTO kudos (owner_id, item, giver_id, created) VALUES (?, ?, ?, ?)").bind(u.id, item, me, now).run();
       const label = String(b.label || "").slice(0, 60);
@@ -600,7 +600,7 @@ function notifText(kind, d){
   if (kind === "accepted") return `${d.actor} accepted your friend request`;
   if (kind === "declined") return `${d.actor} declined your friend request`;
   if (kind === "joined") return `${d.actor} joined ${d.grpName}`;
-  if (kind === "5ha") return `${d.actor} gave you 5HA${d.label ? " for " + d.label : ""}`;
+  if (kind === "5ha") return `${d.actor} gave you 5Ha!${d.label ? " for " + d.label : ""}`;
   if (kind === "test") return "Notifications are on. You'll hear about friend requests and group joins here.";
   return "Something new on OnlyPains";
 }

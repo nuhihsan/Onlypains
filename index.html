@@ -1562,12 +1562,12 @@ function avatarHtml(user, key, size){
 const fhaLabel = it => it.kind === "ach" ? it.name : it.kind === "run" ? `your ${kg(it.km)} km run` : `your ${it.name} workout`;
 function fhaHtml(it){
   if(!it.key || !it.fha) return "";
-  const f = it.fha, names = f.names && f.names.length ? `<small class="muted">${esc(f.names.join(", "))}${f.n > f.names.length ? ` and ${f.n - f.names.length} more` : ""} gave 5HA</small>` : "";
-  if(it.self) return f.n ? `<div class="row" style="flex-wrap:wrap;gap:8px"><span class="fha on" aria-label="${f.n} 5HA">✋ 5HA · ${f.n}</span>${names}</div>` : "";
-  return `<div class="row" style="flex-wrap:wrap;gap:8px"><button class="fha ${f.mine ? "on" : ""}" data-action="soc-5ha" data-u="${esc(it.user)}" data-i="${esc(it.key)}" aria-pressed="${f.mine}">✋ 5HA${f.n ? ` · ${f.n}` : ""}</button>${names}</div>`;
+  const f = it.fha, names = f.names && f.names.length ? `<small class="muted">${esc(f.names.join(", "))}${f.n > f.names.length ? ` and ${f.n - f.names.length} more` : ""} gave 5Ha!</small>` : "";
+  if(it.self) return f.n ? `<div class="row" style="flex-wrap:wrap;gap:8px"><span class="fha on" aria-label="${f.n} 5Ha!">✋ 5Ha! · ${f.n}</span>${names}</div>` : "";
+  return `<div class="row" style="flex-wrap:wrap;gap:8px"><button class="fha ${f.mine ? "on" : ""}" data-action="soc-5ha" data-u="${esc(it.user)}" data-i="${esc(it.key)}" aria-pressed="${f.mine}">✋ 5Ha!${f.n ? ` · ${f.n}` : ""}</button>${names}</div>`;
 }
 const liftTxt = x => `${esc(x.name)} ${kg(x.kg)} kg x ${esc(x.reps)}`;
-// plain: inside someone's profile, so no name line and no 5HA
+// plain: inside someone's profile, so no name line and no 5Ha!
 function feedItemHtml(it, plain){
   const who = it.self ? `<b>You</b>` : userBtn(it.user), when = it.date === todayStr() ? "today" : esc(fmtDate(it.date));
   const head = txt => plain ? `<div class="row between"><span>${txt}</span><small class="muted">${when}</small></div>`
@@ -1761,7 +1761,7 @@ function notifLine(n){
   if(n.kind === "accepted") return `${a} accepted your friend request`;
   if(n.kind === "declined") return `${a} declined your friend request`;
   if(n.kind === "joined") return `${a} joined <b>${esc(n.group ? n.group.name : "your group")}</b>`;
-  if(n.kind === "5ha") return `${a} gave you ✋ 5HA${n.label ? ` for <b>${esc(n.label)}</b>` : ""}`;
+  if(n.kind === "5ha") return `${a} gave you ✋ 5Ha!${n.label ? ` for <b>${esc(n.label)}</b>` : ""}`;
   return "Something new";
 }
 const notifPlain = n => notifLine(n).replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'");
@@ -2179,7 +2179,7 @@ async function handleWriteError(e){
 const APP_VERSION = "1.8";
 const PATCH_NOTES = [
   { v: "1.8", date: "2026-11-19", items: [
-    "5HA: give your friends a 5HA on their workouts, runs and milestones in the Feed. You get a notification when someone 5HAs you",
+    "5Ha!: give your friends a 5Ha! on their workouts, runs and milestones in the Feed. You get a notification when someone gives you one",
     "Milestones you unlock now show up in your friends' Feed",
     "Profile photos: add one under Friends > Your profile. It shows next to your name for friends and group-mates",
     "Friend profiles now list their latest achievements",
