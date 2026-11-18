@@ -18,6 +18,8 @@
 //   POST /auth/google-redirect   form post from Google's own sign-in page (no popup, works on iPhone);
 //                                 sends the user back to the app with a one-time login in the address #fragment
 //   POST /sync            Bearer token, { since, changes: [{ path, data, t, del }] } -> { now, changes }
+//   POST /social/...      Bearer token. Friends, groups, feed and profiles (see "Friends and groups" below)
+//   POST /group/...       Bearer token. Create, join, view and leave groups
 //
 // Passwords are never stored: only a salted PBKDF2-SHA256 hash. Login tokens are stored as SHA-256 hashes.
 
@@ -76,6 +78,7 @@ export default {
       if (path === "/auth/logout") { await env.DB.prepare("DELETE FROM sessions WHERE token_hash = ?").bind(who.th).run(); return reply(200, { ok: true }); }
       if (path === "/auth/password") return await changePw(b, who, env, reply);
       if (path === "/sync") return await sync(b, who, env, reply);
+      if (path.startsWith("/social/") || path.startsWith("/group/")) return await social(path, b, who, env, reply);
       return reply(404, { ok: false, error: "not found" });
     } catch (e) {
       return reply(500, { ok: false, error: "server error" });
@@ -251,4 +254,249 @@ async function googleAccount(g, env){
   for (let i = 0; i < 50 && await env.DB.prepare("SELECT 1 FROM users WHERE username = ?").bind(u).first(); i++) u = base + Math.floor(10 + Math.random() * 990);
   const r = await env.DB.prepare("INSERT INTO users (username, pass_hash, salt, created, google_sub, email) VALUES (?, '', '', ?, ?, ?)").bind(u, Date.now(), g.sub, email).run();
   return { token: await newSession(r.meta.last_row_id, env), username: u, created: true };
+}
+
+// ---------- Friends and groups ----------
+// Each phone publishes a small summary of its own stats (recent workouts and runs, PRs, streak, weekly totals).
+// Friends and group-mates only ever see that summary, never the raw log, and only the parts the owner shares:
+// lifts and runs are shared by default, body weight is off by default, food is never shared.
+// Tables are created automatically the first time any of this is used.
+const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+const newCode = () => [...crypto.getRandomValues(new Uint8Array(8))].map(x => CODE_CHARS[x % CODE_CHARS.length]).join("");
+const cleanCode = c => String(c || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12);
+const MAX_SUMMARY = 40000, MAX_PENDING = 30, MAX_OWNED_GROUPS = 10, MAX_GROUP_SIZE = 50, MAX_GROUPS = 20;
+const DEFAULT_SHARE = { lifts: true, runs: true, body: false };
+
+let socialReady = false;
+async function ensureSocial(env){
+  if (socialReady) return;
+  await env.DB.batch([
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS social (user_id INTEGER PRIMARY KEY, code TEXT NOT NULL UNIQUE, share TEXT NOT NULL DEFAULT '{}', summary TEXT, pub INTEGER NOT NULL DEFAULT 0)"),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS friend_reqs (from_id INTEGER NOT NULL, to_id INTEGER NOT NULL, created INTEGER NOT NULL, PRIMARY KEY (from_id, to_id))"),
+    env.DB.prepare("CREATE INDEX IF NOT EXISTS friend_reqs_to ON friend_reqs(to_id)"),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS friends (a INTEGER NOT NULL, b INTEGER NOT NULL, created INTEGER NOT NULL, PRIMARY KEY (a, b))"),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS grp (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, code TEXT NOT NULL UNIQUE, owner INTEGER NOT NULL, created INTEGER NOT NULL)"),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS grp_members (grp_id INTEGER NOT NULL, user_id INTEGER NOT NULL, joined INTEGER NOT NULL, PRIMARY KEY (grp_id, user_id))"),
+    env.DB.prepare("CREATE INDEX IF NOT EXISTS grp_members_user ON grp_members(user_id)")
+  ]);
+  socialReady = true;
+}
+async function mySocial(id, env){
+  let row = await env.DB.prepare("SELECT code, share FROM social WHERE user_id = ?").bind(id).first();
+  for (let i = 0; !row && i < 5; i++) {
+    try { await env.DB.prepare("INSERT INTO social (user_id, code) VALUES (?, ?)").bind(id, newCode()).run(); } catch (e) {}
+    row = await env.DB.prepare("SELECT code, share FROM social WHERE user_id = ?").bind(id).first();
+  }
+  return { code: row.code, share: shareOf(row.share) };
+}
+function shareOf(text){ try { return Object.assign({}, DEFAULT_SHARE, JSON.parse(text || "{}")); } catch (e) { return Object.assign({}, DEFAULT_SHARE); } }
+// strip whatever the owner isn't sharing
+function visible(summaryText, shareText, self){
+  let s; try { s = JSON.parse(summaryText || "null"); } catch (e) { return null; }
+  if (!s || typeof s !== "object") return null;
+  const sh = self ? { lifts: true, runs: true, body: true } : shareOf(shareText);
+  const t = s.totals || {}, o = { at: s.at || 0, share: sh, totals: {}, weeks: {} };
+  if (sh.lifts) { o.lifts = s.lifts || null; o.streak = s.streak || null; o.totals.sessions = t.sessions; o.totals.volume = t.volume; }
+  if (sh.runs) { o.runs = s.runs || null; o.totals.runKm = t.runKm; }
+  if (sh.body) o.body = s.body || null;
+  for (const [w, v] of Object.entries(s.weeks || {})) if (v) o.weeks[w] = { s: sh.lifts ? v.s : null, vol: sh.lifts ? v.vol : null, km: sh.runs ? v.km : null };
+  return o;
+}
+// everyone this user may see: friends plus anyone in a group with them
+async function circle(id, env){
+  const r = await env.DB.prepare(
+    `SELECT b AS id FROM friends WHERE a = ?1
+     UNION SELECT m2.user_id AS id FROM grp_members m1 JOIN grp_members m2 ON m1.grp_id = m2.grp_id WHERE m1.user_id = ?1 AND m2.user_id != ?1`
+  ).bind(id).all();
+  return (r.results || []).map(x => x.id);
+}
+async function canSee(viewer, target, env){
+  if (viewer === target) return true;
+  const r = await env.DB.prepare(
+    `SELECT 1 FROM friends WHERE a = ?1 AND b = ?2
+     UNION SELECT 1 FROM grp_members m1 JOIN grp_members m2 ON m1.grp_id = m2.grp_id WHERE m1.user_id = ?1 AND m2.user_id = ?2 LIMIT 1`
+  ).bind(viewer, target).first();
+  return !!r;
+}
+async function summariesOf(ids, env){
+  const out = [];
+  for (let i = 0; i < ids.length; i += 90) {
+    const part = ids.slice(i, i + 90);
+    const r = await env.DB.prepare(`SELECT u.id, u.username, s.summary, s.share FROM users u LEFT JOIN social s ON s.user_id = u.id WHERE u.id IN (${part.map(() => "?").join(",")})`).bind(...part).all();
+    out.push(...(r.results || []));
+  }
+  return out;
+}
+const userByName = (u, env) => env.DB.prepare("SELECT id, username FROM users WHERE username = ?").bind(cleanUser(u)).first();
+
+async function social(path, b, who, env, reply){
+  await ensureSocial(env);
+  const me = who.id, now = Date.now();
+  const bad = msg => reply(400, { ok: false, error: msg });
+
+  if (path === "/social/me") {
+    const mine = await mySocial(me, env);
+    const [fr, inc, out, gr] = await Promise.all([
+      env.DB.prepare("SELECT u.username, s.pub FROM friends f JOIN users u ON u.id = f.b LEFT JOIN social s ON s.user_id = f.b WHERE f.a = ? ORDER BY u.username").bind(me).all(),
+      env.DB.prepare("SELECT u.username FROM friend_reqs r JOIN users u ON u.id = r.from_id WHERE r.to_id = ? ORDER BY r.created DESC").bind(me).all(),
+      env.DB.prepare("SELECT u.username FROM friend_reqs r JOIN users u ON u.id = r.to_id WHERE r.from_id = ? ORDER BY r.created DESC").bind(me).all(),
+      env.DB.prepare("SELECT g.id, g.name, g.code, g.owner, (SELECT COUNT(*) FROM grp_members x WHERE x.grp_id = g.id) AS n FROM grp_members m JOIN grp g ON g.id = m.grp_id WHERE m.user_id = ? ORDER BY g.name").bind(me).all()
+    ]);
+    return reply(200, { ok: true, username: who.username, code: mine.code, share: mine.share,
+      friends: (fr.results || []).map(r => ({ username: r.username, active: r.pub || 0 })),
+      incoming: (inc.results || []).map(r => r.username), outgoing: (out.results || []).map(r => r.username),
+      groups: (gr.results || []).map(g => ({ id: g.id, name: g.name, code: g.code, owner: g.owner === me, members: g.n })) });
+  }
+
+  if (path === "/social/share") {
+    const sh = { lifts: !!b.lifts, runs: !!b.runs, body: !!b.body };
+    await mySocial(me, env);
+    await env.DB.prepare("UPDATE social SET share = ? WHERE user_id = ?").bind(JSON.stringify(sh), me).run();
+    return reply(200, { ok: true, share: sh });
+  }
+
+  if (path === "/social/publish") {
+    const text = JSON.stringify(b.summary ?? null);
+    if (!b.summary || typeof b.summary !== "object" || text.length > MAX_SUMMARY) return bad("Summary too big");
+    await mySocial(me, env);
+    await env.DB.prepare("UPDATE social SET summary = ?, pub = ? WHERE user_id = ?").bind(text, now, me).run();
+    return reply(200, { ok: true });
+  }
+
+  if (path === "/social/add") {
+    const code = cleanCode(b.code);
+    if (code.length < 6) return bad("That code looks too short. Codes are 8 letters and numbers.");
+    const row = await env.DB.prepare("SELECT s.user_id AS id, u.username FROM social s JOIN users u ON u.id = s.user_id WHERE s.code = ?").bind(code).first();
+    if (!row) return reply(404, { ok: false, error: "No one has that friend code. Check it and try again." });
+    if (row.id === me) return bad("That's your own code. Send it to a friend instead.");
+    if (await env.DB.prepare("SELECT 1 FROM friends WHERE a = ? AND b = ?").bind(me, row.id).first()) return reply(200, { ok: true, status: "friends", username: row.username });
+    if (await env.DB.prepare("SELECT 1 FROM friend_reqs WHERE from_id = ? AND to_id = ?").bind(row.id, me).first()) {
+      await makeFriends(me, row.id, env); // they already asked you
+      return reply(200, { ok: true, status: "friends", username: row.username });
+    }
+    const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM friend_reqs WHERE from_id = ?").bind(me).first();
+    if (n && n.n >= MAX_PENDING) return bad("You have too many requests waiting. Cancel some first.");
+    await env.DB.prepare("INSERT OR IGNORE INTO friend_reqs (from_id, to_id, created) VALUES (?, ?, ?)").bind(me, row.id, now).run();
+    return reply(200, { ok: true, status: "sent", username: row.username });
+  }
+
+  if (path === "/social/respond") {
+    const u = await userByName(b.username, env);
+    if (!u || !(await env.DB.prepare("SELECT 1 FROM friend_reqs WHERE from_id = ? AND to_id = ?").bind(u.id, me).first())) return reply(404, { ok: false, error: "That request is gone." });
+    if (b.accept) await makeFriends(me, u.id, env);
+    else await env.DB.prepare("DELETE FROM friend_reqs WHERE from_id = ? AND to_id = ?").bind(u.id, me).run();
+    return reply(200, { ok: true });
+  }
+
+  if (path === "/social/remove") { // unfriend, or cancel a request either way
+    const u = await userByName(b.username, env);
+    if (u) await env.DB.batch([
+      env.DB.prepare("DELETE FROM friends WHERE (a = ?1 AND b = ?2) OR (a = ?2 AND b = ?1)").bind(me, u.id),
+      env.DB.prepare("DELETE FROM friend_reqs WHERE (from_id = ?1 AND to_id = ?2) OR (from_id = ?2 AND to_id = ?1)").bind(me, u.id)
+    ]);
+    return reply(200, { ok: true });
+  }
+
+  if (path === "/social/profile") {
+    const u = await userByName(b.username, env);
+    if (!u || !(await canSee(me, u.id, env))) return reply(404, { ok: false, error: "You can only see friends and people in your groups." });
+    const row = await env.DB.prepare("SELECT summary, share FROM social WHERE user_id = ?").bind(u.id).first();
+    const friend = !!(await env.DB.prepare("SELECT 1 FROM friends WHERE a = ? AND b = ?").bind(me, u.id).first());
+    return reply(200, { ok: true, username: u.username, self: u.id === me, friend, summary: row ? visible(row.summary, row.share, u.id === me) : null });
+  }
+
+  if (path === "/social/feed") {
+    const ids = [me, ...(await circle(me, env))].slice(0, 500);
+    const cutoff = String(b.from || "").match(/^\d{4}-\d{2}-\d{2}$/) ? b.from : "0000";
+    const items = [];
+    for (const r of await summariesOf(ids, env)) {
+      const s = visible(r.summary, r.share, r.id === me);
+      if (!s) continue;
+      for (const w of (s.lifts && s.lifts.recent) || []) if (w && w.date >= cutoff) items.push(Object.assign({ kind: "lift", user: r.username, self: r.id === me }, w));
+      for (const w of (s.runs && s.runs.recent) || []) if (w && w.date >= cutoff) items.push(Object.assign({ kind: "run", user: r.username, self: r.id === me }, w));
+    }
+    items.sort((x, y) => String(y.date).localeCompare(String(x.date)) || (y.ts || 0) - (x.ts || 0));
+    return reply(200, { ok: true, items: items.slice(0, 80) });
+  }
+
+  if (path === "/group/create") {
+    const name = String(b.name || "").trim().replace(/\s+/g, " ").slice(0, 30);
+    if (name.length < 2) return bad("Give the group a name.");
+    const own = await env.DB.prepare("SELECT COUNT(*) AS n FROM grp WHERE owner = ?").bind(me).first();
+    if (own && own.n >= MAX_OWNED_GROUPS) return bad(`You can make up to ${MAX_OWNED_GROUPS} groups.`);
+    let id = null;
+    for (let i = 0; !id && i < 5; i++) {
+      try { id = (await env.DB.prepare("INSERT INTO grp (name, code, owner, created) VALUES (?, ?, ?, ?)").bind(name, newCode(), me, now).run()).meta.last_row_id; } catch (e) {}
+    }
+    if (!id) return reply(500, { ok: false, error: "Couldn't make the group. Try again." });
+    await env.DB.prepare("INSERT INTO grp_members (grp_id, user_id, joined) VALUES (?, ?, ?)").bind(id, me, now).run();
+    return reply(200, { ok: true, id });
+  }
+
+  if (path === "/group/join") {
+    const code = cleanCode(b.code);
+    const g = code.length >= 6 && await env.DB.prepare("SELECT id, name FROM grp WHERE code = ?").bind(code).first();
+    if (!g) return reply(404, { ok: false, error: "No group has that code. Check it and try again." });
+    if (await env.DB.prepare("SELECT 1 FROM grp_members WHERE grp_id = ? AND user_id = ?").bind(g.id, me).first()) return reply(200, { ok: true, id: g.id, name: g.name, already: true });
+    const [size, mine] = await Promise.all([
+      env.DB.prepare("SELECT COUNT(*) AS n FROM grp_members WHERE grp_id = ?").bind(g.id).first(),
+      env.DB.prepare("SELECT COUNT(*) AS n FROM grp_members WHERE user_id = ?").bind(me).first()]);
+    if (size && size.n >= MAX_GROUP_SIZE) return bad("That group is full.");
+    if (mine && mine.n >= MAX_GROUPS) return bad(`You can be in up to ${MAX_GROUPS} groups.`);
+    await env.DB.prepare("INSERT INTO grp_members (grp_id, user_id, joined) VALUES (?, ?, ?)").bind(g.id, me, now).run();
+    return reply(200, { ok: true, id: g.id, name: g.name });
+  }
+
+  // everything below needs you to be in the group
+  const gid = Number(b.id) || 0;
+  const g = await env.DB.prepare("SELECT g.id, g.name, g.code, g.owner FROM grp g JOIN grp_members m ON m.grp_id = g.id AND m.user_id = ? WHERE g.id = ?").bind(me, gid).first();
+  if (!g) return reply(404, { ok: false, error: "You're not in that group." });
+  const isOwner = g.owner === me;
+
+  if (path === "/group/view") {
+    const r = await env.DB.prepare("SELECT u.id, u.username, s.summary, s.share, m.joined FROM grp_members m JOIN users u ON u.id = m.user_id LEFT JOIN social s ON s.user_id = u.id WHERE m.grp_id = ? ORDER BY m.joined").bind(g.id).all();
+    const week = String(b.week || "");
+    const members = (r.results || []).map(x => {
+      const s = visible(x.summary, x.share, x.id === me);
+      return { username: x.username, self: x.id === me, owner: x.id === g.owner, published: !!s,
+        week: s && s.weeks[week] || null, streak: s && s.streak ? s.streak.cur : null, share: s ? s.share : null };
+    });
+    return reply(200, { ok: true, id: g.id, name: g.name, code: g.code, owner: isOwner, members });
+  }
+  if (path === "/group/leave") {
+    await env.DB.prepare("DELETE FROM grp_members WHERE grp_id = ? AND user_id = ?").bind(g.id, me).run();
+    const next = await env.DB.prepare("SELECT user_id FROM grp_members WHERE grp_id = ? ORDER BY joined LIMIT 1").bind(g.id).first();
+    if (!next) await env.DB.prepare("DELETE FROM grp WHERE id = ?").bind(g.id).run();          // last one out
+    else if (isOwner) await env.DB.prepare("UPDATE grp SET owner = ? WHERE id = ?").bind(next.user_id, g.id).run(); // hand it on
+    return reply(200, { ok: true });
+  }
+  if (!isOwner) return reply(403, { ok: false, error: "Only the group's owner can do that." });
+  if (path === "/group/kick") {
+    const u = await userByName(b.username, env);
+    if (!u || u.id === me) return bad("Pick someone else.");
+    await env.DB.prepare("DELETE FROM grp_members WHERE grp_id = ? AND user_id = ?").bind(g.id, u.id).run();
+    return reply(200, { ok: true });
+  }
+  if (path === "/group/newcode") {
+    for (let i = 0; i < 5; i++) {
+      const c = newCode();
+      try { await env.DB.prepare("UPDATE grp SET code = ? WHERE id = ?").bind(c, g.id).run(); return reply(200, { ok: true, code: c }); } catch (e) {}
+    }
+    return reply(500, { ok: false, error: "Try again." });
+  }
+  if (path === "/group/rename") {
+    const name = String(b.name || "").trim().replace(/\s+/g, " ").slice(0, 30);
+    if (name.length < 2) return bad("Give the group a name.");
+    await env.DB.prepare("UPDATE grp SET name = ? WHERE id = ?").bind(name, g.id).run();
+    return reply(200, { ok: true });
+  }
+  return reply(404, { ok: false, error: "not found" });
+}
+async function makeFriends(x, y, env){
+  const now = Date.now();
+  await env.DB.batch([
+    env.DB.prepare("INSERT OR IGNORE INTO friends (a, b, created) VALUES (?, ?, ?)").bind(x, y, now),
+    env.DB.prepare("INSERT OR IGNORE INTO friends (a, b, created) VALUES (?, ?, ?)").bind(y, x, now),
+    env.DB.prepare("DELETE FROM friend_reqs WHERE (from_id = ?1 AND to_id = ?2) OR (from_id = ?2 AND to_id = ?1)").bind(x, y)
+  ]);
 }
