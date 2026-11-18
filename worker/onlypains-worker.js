@@ -20,6 +20,8 @@
 //   POST /sync            Bearer token, { since, changes: [{ path, data, t, del }] } -> { now, changes }
 //   POST /social/...      Bearer token. Friends, groups, feed and profiles (see "Friends and groups" below)
 //   POST /group/...       Bearer token. Create, join, view and leave groups
+//   POST /social/notifs   Bearer token. Your notifications (friend requests, accepted, declined, group joins)
+//   POST /push/...        Bearer token. Phone notifications: key, subscribe, unsubscribe
 //
 // Passwords are never stored: only a salted PBKDF2-SHA256 hash. Login tokens are stored as SHA-256 hashes.
 
@@ -46,7 +48,7 @@ const validUser = u => /^[a-z0-9_]{3,20}$/.test(u);
 const validPath = p => typeof p === "string" && p.length <= 200 && /^[A-Za-z0-9_\-\/.]+$/.test(p) && !p.includes("..");
 
 export default {
-  async fetch(req, env) {
+  async fetch(req, env, ctx) {
     const origin = req.headers.get("Origin") || "";
     const allowed = ALLOWED_ORIGINS.includes(origin);
     const cors = {
@@ -78,7 +80,7 @@ export default {
       if (path === "/auth/logout") { await env.DB.prepare("DELETE FROM sessions WHERE token_hash = ?").bind(who.th).run(); return reply(200, { ok: true }); }
       if (path === "/auth/password") return await changePw(b, who, env, reply);
       if (path === "/sync") return await sync(b, who, env, reply);
-      if (path.startsWith("/social/") || path.startsWith("/group/")) return await social(path, b, who, env, reply);
+      if (path.startsWith("/social/") || path.startsWith("/group/") || path.startsWith("/push/")) return await social(path, b, who, env, reply, ctx);
       return reply(404, { ok: false, error: "not found" });
     } catch (e) {
       return reply(500, { ok: false, error: "server error" });
@@ -277,7 +279,12 @@ async function ensureSocial(env){
     env.DB.prepare("CREATE TABLE IF NOT EXISTS friends (a INTEGER NOT NULL, b INTEGER NOT NULL, created INTEGER NOT NULL, PRIMARY KEY (a, b))"),
     env.DB.prepare("CREATE TABLE IF NOT EXISTS grp (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, code TEXT NOT NULL UNIQUE, owner INTEGER NOT NULL, created INTEGER NOT NULL)"),
     env.DB.prepare("CREATE TABLE IF NOT EXISTS grp_members (grp_id INTEGER NOT NULL, user_id INTEGER NOT NULL, joined INTEGER NOT NULL, PRIMARY KEY (grp_id, user_id))"),
-    env.DB.prepare("CREATE INDEX IF NOT EXISTS grp_members_user ON grp_members(user_id)")
+    env.DB.prepare("CREATE INDEX IF NOT EXISTS grp_members_user ON grp_members(user_id)"),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS notifs (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, kind TEXT NOT NULL, actor TEXT, grp_id INTEGER, grp_name TEXT, created INTEGER NOT NULL, read INTEGER NOT NULL DEFAULT 0)"),
+    env.DB.prepare("CREATE INDEX IF NOT EXISTS notifs_user ON notifs(user_id, id)"),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS push_subs (endpoint TEXT PRIMARY KEY, user_id INTEGER NOT NULL, p256dh TEXT NOT NULL, auth TEXT NOT NULL, created INTEGER NOT NULL)"),
+    env.DB.prepare("CREATE INDEX IF NOT EXISTS push_subs_user ON push_subs(user_id)"),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS app_kv (k TEXT PRIMARY KEY, v TEXT NOT NULL)")
   ]);
   socialReady = true;
 }
@@ -329,20 +336,21 @@ async function summariesOf(ids, env){
 }
 const userByName = (u, env) => env.DB.prepare("SELECT id, username FROM users WHERE username = ?").bind(cleanUser(u)).first();
 
-async function social(path, b, who, env, reply){
+async function social(path, b, who, env, reply, ctx){
   await ensureSocial(env);
   const me = who.id, now = Date.now();
   const bad = msg => reply(400, { ok: false, error: msg });
 
   if (path === "/social/me") {
     const mine = await mySocial(me, env);
-    const [fr, inc, out, gr] = await Promise.all([
+    const [fr, inc, out, gr, un] = await Promise.all([
       env.DB.prepare("SELECT u.username, s.pub FROM friends f JOIN users u ON u.id = f.b LEFT JOIN social s ON s.user_id = f.b WHERE f.a = ? ORDER BY u.username").bind(me).all(),
       env.DB.prepare("SELECT u.username FROM friend_reqs r JOIN users u ON u.id = r.from_id WHERE r.to_id = ? ORDER BY r.created DESC").bind(me).all(),
       env.DB.prepare("SELECT u.username FROM friend_reqs r JOIN users u ON u.id = r.to_id WHERE r.from_id = ? ORDER BY r.created DESC").bind(me).all(),
-      env.DB.prepare("SELECT g.id, g.name, g.code, g.owner, (SELECT COUNT(*) FROM grp_members x WHERE x.grp_id = g.id) AS n FROM grp_members m JOIN grp g ON g.id = m.grp_id WHERE m.user_id = ? ORDER BY g.name").bind(me).all()
+      env.DB.prepare("SELECT g.id, g.name, g.code, g.owner, (SELECT COUNT(*) FROM grp_members x WHERE x.grp_id = g.id) AS n FROM grp_members m JOIN grp g ON g.id = m.grp_id WHERE m.user_id = ? ORDER BY g.name").bind(me).all(),
+      env.DB.prepare("SELECT COUNT(*) AS n FROM notifs WHERE user_id = ? AND read = 0").bind(me).first()
     ]);
-    return reply(200, { ok: true, username: who.username, code: mine.code, share: mine.share,
+    return reply(200, { ok: true, username: who.username, code: mine.code, share: mine.share, unread: un ? un.n : 0,
       friends: (fr.results || []).map(r => ({ username: r.username, active: r.pub || 0 })),
       incoming: (inc.results || []).map(r => r.username), outgoing: (out.results || []).map(r => r.username),
       groups: (gr.results || []).map(g => ({ id: g.id, name: g.name, code: g.code, owner: g.owner === me, members: g.n })) });
@@ -372,11 +380,14 @@ async function social(path, b, who, env, reply){
     if (await env.DB.prepare("SELECT 1 FROM friends WHERE a = ? AND b = ?").bind(me, row.id).first()) return reply(200, { ok: true, status: "friends", username: row.username });
     if (await env.DB.prepare("SELECT 1 FROM friend_reqs WHERE from_id = ? AND to_id = ?").bind(row.id, me).first()) {
       await makeFriends(me, row.id, env); // they already asked you
+      await markReqHandled(me, row.username, env);
+      await notify(env, ctx, [row.id], "accepted", { actor: who.username });
       return reply(200, { ok: true, status: "friends", username: row.username });
     }
     const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM friend_reqs WHERE from_id = ?").bind(me).first();
     if (n && n.n >= MAX_PENDING) return bad("You have too many requests waiting. Cancel some first.");
-    await env.DB.prepare("INSERT OR IGNORE INTO friend_reqs (from_id, to_id, created) VALUES (?, ?, ?)").bind(me, row.id, now).run();
+    const ins = await env.DB.prepare("INSERT OR IGNORE INTO friend_reqs (from_id, to_id, created) VALUES (?, ?, ?)").bind(me, row.id, now).run();
+    if (ins.meta && ins.meta.changes) await notify(env, ctx, [row.id], "req", { actor: who.username }); // not again for a repeat tap
     return reply(200, { ok: true, status: "sent", username: row.username });
   }
 
@@ -385,6 +396,8 @@ async function social(path, b, who, env, reply){
     if (!u || !(await env.DB.prepare("SELECT 1 FROM friend_reqs WHERE from_id = ? AND to_id = ?").bind(u.id, me).first())) return reply(404, { ok: false, error: "That request is gone." });
     if (b.accept) await makeFriends(me, u.id, env);
     else await env.DB.prepare("DELETE FROM friend_reqs WHERE from_id = ? AND to_id = ?").bind(u.id, me).run();
+    await markReqHandled(me, u.username, env);
+    await notify(env, ctx, [u.id], b.accept ? "accepted" : "declined", { actor: who.username });
     return reply(200, { ok: true });
   }
 
@@ -419,6 +432,36 @@ async function social(path, b, who, env, reply){
     return reply(200, { ok: true, items: items.slice(0, 80) });
   }
 
+  if (path === "/social/notifs") {
+    await env.DB.prepare("DELETE FROM notifs WHERE user_id = ? AND created < ?").bind(me, now - 30 * 86400000).run();
+    const r = await env.DB.prepare(
+      `SELECT n.id, n.kind, n.actor, n.grp_id, n.grp_name, n.created, n.read,
+         CASE WHEN n.kind = 'req' THEN EXISTS (SELECT 1 FROM friend_reqs q JOIN users u ON u.id = q.from_id WHERE q.to_id = n.user_id AND u.username = n.actor) ELSE 0 END AS pending
+       FROM notifs n WHERE n.user_id = ? ORDER BY n.id DESC LIMIT 50`).bind(me).all();
+    const list = (r.results || []).map(n => ({ id: n.id, kind: n.kind, actor: n.actor, group: n.grp_id ? { id: n.grp_id, name: n.grp_name } : null, at: n.created, read: !!n.read, pending: !!n.pending }));
+    return reply(200, { ok: true, items: list, unread: list.filter(n => !n.read).length });
+  }
+  if (path === "/social/notifs-read") {
+    await env.DB.prepare("UPDATE notifs SET read = 1 WHERE user_id = ? AND read = 0").bind(me).run();
+    return reply(200, { ok: true });
+  }
+  if (path === "/push/key") return reply(200, { ok: true, key: (await vapidKeys(env)).pub });
+  if (path === "/push/subscribe") {
+    const ep = String(b.endpoint || ""), k = b.keys || {};
+    if (!PUSH_HOSTS.test(ep) || ep.length > 1000 || !/^[A-Za-z0-9_-]{80,100}$/.test(String(k.p256dh || "")) || !/^[A-Za-z0-9_-]{16,30}$/.test(String(k.auth || ""))) return bad("That phone can't take notifications.");
+    await env.DB.prepare("INSERT OR REPLACE INTO push_subs (endpoint, user_id, p256dh, auth, created) VALUES (?, ?, ?, ?, ?)").bind(ep, me, k.p256dh, k.auth, now).run();
+    await env.DB.prepare("DELETE FROM push_subs WHERE user_id = ? AND endpoint NOT IN (SELECT endpoint FROM push_subs WHERE user_id = ? ORDER BY created DESC LIMIT 10)").bind(me, me).run();
+    return reply(200, { ok: true });
+  }
+  if (path === "/push/unsubscribe") {
+    await env.DB.prepare("DELETE FROM push_subs WHERE endpoint = ? AND user_id = ?").bind(String(b.endpoint || ""), me).run();
+    return reply(200, { ok: true });
+  }
+  if (path === "/push/test") {
+    await notify(env, ctx, [me], "test", { actor: who.username });
+    return reply(200, { ok: true });
+  }
+
   if (path === "/group/create") {
     const name = String(b.name || "").trim().replace(/\s+/g, " ").slice(0, 30);
     if (name.length < 2) return bad("Give the group a name.");
@@ -444,6 +487,8 @@ async function social(path, b, who, env, reply){
     if (size && size.n >= MAX_GROUP_SIZE) return bad("That group is full.");
     if (mine && mine.n >= MAX_GROUPS) return bad(`You can be in up to ${MAX_GROUPS} groups.`);
     await env.DB.prepare("INSERT INTO grp_members (grp_id, user_id, joined) VALUES (?, ?, ?)").bind(g.id, me, now).run();
+    const others = ((await env.DB.prepare("SELECT user_id FROM grp_members WHERE grp_id = ? AND user_id != ?").bind(g.id, me).all()).results || []).map(r => r.user_id);
+    await notify(env, ctx, others, "joined", { actor: who.username, grpId: g.id, grpName: g.name });
     return reply(200, { ok: true, id: g.id, name: g.name });
   }
 
@@ -499,4 +544,90 @@ async function makeFriends(x, y, env){
     env.DB.prepare("INSERT OR IGNORE INTO friends (a, b, created) VALUES (?, ?, ?)").bind(y, x, now),
     env.DB.prepare("DELETE FROM friend_reqs WHERE (from_id = ?1 AND to_id = ?2) OR (from_id = ?2 AND to_id = ?1)").bind(x, y)
   ]);
+}
+
+// ---------- Notifications ----------
+// Every notification is kept for 30 days for the bell in the app, and also sent as a phone notification
+// to any phone that switched them on. Phone notifications use the standard Web Push protocol (RFC 8291 + VAPID).
+// The VAPID signing key is made once and kept in D1, so there's nothing to set up.
+const PUSH_HOSTS = /^https:\/\/([a-z0-9-]+\.)*(fcm\.googleapis\.com|android\.googleapis\.com|push\.services\.mozilla\.com|push\.apple\.com|notify\.windows\.com)\//i;
+function notifText(kind, d){
+  if (kind === "req") return `${d.actor} sent you a friend request`;
+  if (kind === "accepted") return `${d.actor} accepted your friend request`;
+  if (kind === "declined") return `${d.actor} declined your friend request`;
+  if (kind === "joined") return `${d.actor} joined ${d.grpName}`;
+  if (kind === "test") return "Notifications are on. You'll hear about friend requests and group joins here.";
+  return "Something new on OnlyPains";
+}
+async function notify(env, ctx, userIds, kind, d){
+  if (!userIds.length) return;
+  const now = Date.now();
+  if (kind !== "test") await env.DB.batch(userIds.map(u => env.DB.prepare("INSERT INTO notifs (user_id, kind, actor, grp_id, grp_name, created) VALUES (?, ?, ?, ?, ?, ?)").bind(u, kind, d.actor || null, d.grpId || null, d.grpName || null, now)));
+  const msg = { title: "OnlyPains", body: notifText(kind, d), url: APP_URL + "#notifs", tag: `${kind}-${d.actor || ""}-${d.grpId || ""}` };
+  const p = pushTo(env, userIds, msg).catch(() => {});
+  if (ctx && ctx.waitUntil) ctx.waitUntil(p); else await p;
+}
+async function markReqHandled(me, actor, env){
+  await env.DB.prepare("UPDATE notifs SET read = 1 WHERE user_id = ? AND kind = 'req' AND actor = ?").bind(me, actor).run();
+}
+async function pushTo(env, userIds, msg){
+  const subs = [];
+  for (let i = 0; i < userIds.length; i += 90) {
+    const part = userIds.slice(i, i + 90);
+    const r = await env.DB.prepare(`SELECT endpoint, p256dh, auth FROM push_subs WHERE user_id IN (${part.map(() => "?").join(",")})`).bind(...part).all();
+    subs.push(...(r.results || []));
+  }
+  if (!subs.length) return;
+  const vapid = await vapidKeys(env);
+  await Promise.all(subs.map(async sub => {
+    try {
+      const r = await sendPush(vapid, sub, msg);
+      if (r.status === 404 || r.status === 410) await env.DB.prepare("DELETE FROM push_subs WHERE endpoint = ?").bind(sub.endpoint).run(); // phone unsubscribed
+    } catch (e) {}
+  }));
+}
+const b64uEnc = bytes => btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const cat = (...arrs) => { const out = new Uint8Array(arrs.reduce((n, a) => n + a.length, 0)); let o = 0; for (const a of arrs) { out.set(a, o); o += a.length; } return out; };
+let vapidCache = null;
+async function vapidKeys(env){
+  if (vapidCache) return vapidCache;
+  let row = await env.DB.prepare("SELECT v FROM app_kv WHERE k = 'vapid'").first();
+  if (!row) {
+    const kp = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]);
+    const v = JSON.stringify({ pub: b64uEnc(await crypto.subtle.exportKey("raw", kp.publicKey)), jwk: await crypto.subtle.exportKey("jwk", kp.privateKey) });
+    await env.DB.prepare("INSERT OR IGNORE INTO app_kv (k, v) VALUES ('vapid', ?)").bind(v).run();
+    row = await env.DB.prepare("SELECT v FROM app_kv WHERE k = 'vapid'").first();
+  }
+  const v = JSON.parse(row.v);
+  vapidCache = { pub: v.pub, key: await crypto.subtle.importKey("jwk", v.jwk, { name: "ECDSA", namedCurve: "P-256" }, false, ["sign"]) };
+  return vapidCache;
+}
+async function vapidJwt(vapid, aud){
+  const head = b64uEnc(enc.encode(JSON.stringify({ typ: "JWT", alg: "ES256" })));
+  const body = b64uEnc(enc.encode(JSON.stringify({ aud, exp: Math.floor(Date.now() / 1000) + 12 * 3600, sub: APP_URL })));
+  const sig = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, vapid.key, enc.encode(head + "." + body));
+  return head + "." + body + "." + b64uEnc(sig);
+}
+async function hkdf(salt, ikm, info, len){
+  const k = await crypto.subtle.importKey("raw", ikm, "HKDF", false, ["deriveBits"]);
+  return new Uint8Array(await crypto.subtle.deriveBits({ name: "HKDF", hash: "SHA-256", salt, info }, k, len * 8));
+}
+// encrypt for one phone (aes128gcm, RFC 8291) and hand it to that phone's push service
+async function sendPush(vapid, sub, msg){
+  const ua = b64u(sub.p256dh), auth = b64u(sub.auth);
+  const eph = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveBits"]);
+  const asPub = new Uint8Array(await crypto.subtle.exportKey("raw", eph.publicKey));
+  const uaKey = await crypto.subtle.importKey("raw", ua, { name: "ECDH", namedCurve: "P-256" }, false, []);
+  const shared = new Uint8Array(await crypto.subtle.deriveBits({ name: "ECDH", public: uaKey }, eph.privateKey, 256));
+  const ikm = await hkdf(auth, shared, cat(enc.encode("WebPush: info\0"), ua, asPub), 32);
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const cek = await hkdf(salt, ikm, enc.encode("Content-Encoding: aes128gcm\0"), 16);
+  const nonce = await hkdf(salt, ikm, enc.encode("Content-Encoding: nonce\0"), 12);
+  const aes = await crypto.subtle.importKey("raw", cek, "AES-GCM", false, ["encrypt"]);
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv: nonce }, aes, cat(enc.encode(JSON.stringify(msg)), new Uint8Array([2]))));
+  const head = new Uint8Array(21 + asPub.length);
+  head.set(salt, 0); new DataView(head.buffer).setUint32(16, 4096); head[20] = asPub.length; head.set(asPub, 21);
+  return fetch(sub.endpoint, { method: "POST", body: cat(head, ct), headers: {
+    "Content-Encoding": "aes128gcm", "Content-Type": "application/octet-stream", "TTL": "86400", "Urgency": "normal",
+    "Authorization": `vapid t=${await vapidJwt(vapid, new URL(sub.endpoint).origin)}, k=${vapid.pub}` } });
 }
