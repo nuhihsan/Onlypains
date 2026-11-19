@@ -668,11 +668,15 @@ function streaks(list){
 }
 /* ---------- bodyweight exercises ----------
    For these the kg box is ADDED weight. The share of your body weight you move (from strength research
-   on push-ups, dips and pull-ups) is added on top, using your latest weight on or before that day. */
-const BW_RULES = [[/muscle-?ups?|pull-?ups?|chin-?ups?/i, 1], [/bench dips?/i, 0.5], [/dips?\b/i, 0.95], [/push-?ups?/i, 0.64], [/inverted rows?/i, 0.6]];
+   on push-ups, dips and pull-ups) is added on top, using your latest weight on or before that day.
+   Abs: leg raises move both legs (about a third of body weight, from body-segment data); sit-ups and
+   V-ups lift about half your body, crunches less as only the shoulders come up. Holds, twists and
+   cable or machine moves are left out. */
+const BW_RULES = [[/muscle-?ups?|pull-?ups?|chin-?ups?/i, 1], [/bench dips?/i, 0.5], [/dips?\b/i, 0.95], [/push-?ups?/i, 0.64], [/inverted rows?/i, 0.6],
+  [/leg raises?|knee raises?|toes[- ]to[- ]bar|reverse crunch/i, 0.33], [/v-?ups?\b/i, 0.5], [/sit-?ups?/i, 0.5], [/crunch/i, 0.3]];
 function bwShare(name){
   name = String(name || "");
-  if(/assist|machine|band/i.test(name)) return 0;
+  if(/assist|machine|band|cable/i.test(name)) return 0;
   for(const [re, f] of BW_RULES) if(re.test(name)) return f;
   return 0;
 }
@@ -2320,7 +2324,8 @@ const APP_VERSION = "1.10";
 const PATCH_NOTES = [
   { v: "1.10", date: "2026-11-19", items: [
     "Bodyweight exercises now count your body weight: pull-ups, chin-ups and muscle-ups use 100% of it, dips 95%, push-ups 64%, inverted rows 60% and bench dips 50%",
-    "On those exercises the kg box is for added weight, like a vest or a plate on a belt. Leave it at 0 for plain bodyweight",
+    "Abs too: sit-ups and V-ups count 50% of your body weight, leg raises, knee raises, toes to bar and reverse crunches 33%, and crunches 30%. Planks, holds, twists and cable or machine moves stay as they were",
+    "On those exercises the kg box is for added weight, like a vest, a plate or ankle weights. Leave it at 0 for plain bodyweight",
     "Volume, est. 1RM, progress charts, compare, new bests and your friends' Feed all include it, using your weight from Me > Body on or before that day",
     "Sets show as BW×10 or BW+10×8, so you can tell bodyweight sets apart",
     "New bests after a workout now count more reps at the same weight, not just more weight" ] },
@@ -2449,7 +2454,7 @@ function renderLog(){
     const bwF = bwShare(e.name), bwW = bwF ? bwOn(draft.date) : null;
     const lastLine = (sug ? `Last (${esc(fmtDate(sug.last.date))}): ${bwF ? esc(setTxt(e.name, { kg: sug.top, reps: sug.last.sets.map(s => s.reps).join(", ") })) : `${kg(sug.top)} kg × ${sug.last.sets.map(s => s.reps).join(", ")}`}` : "First time logging this")
       + (bwF ? `<br>${bwW ? (bwF === 1 ? `Counts your body weight (${kg(bwW)} kg)` : `Counts ${Math.round(bwF * 100)}% of your body weight (${kg(Math.round(bwF * bwW * 10) / 10)} kg)`) : `Log your weight under Me > Body to count your body weight`}` : "");
-    const hint = sug && sug.hit && num(e.sets[0]?.kg) < sug.next ? `<button class="hint" data-action="apply" data-e="${ei}" data-kg="${sug.next}">Hit ${tg.sets}×${tg.reps} last time. ${bwF ? `Add ${kg(sug.next)} kg (vest, belt or plate)` : `Use ${kg(sug.next)} kg`}</button>` : "";
+    const hint = sug && sug.hit && num(e.sets[0]?.kg) < sug.next ? `<button class="hint" data-action="apply" data-e="${ei}" data-kg="${sug.next}">Hit ${tg.sets}×${tg.reps} last time. ${bwF ? `Add ${kg(sug.next)} kg of extra weight` : `Use ${kg(sug.next)} kg`}</button>` : "";
     const sets = e.sets.map((s, si) => `
       <div class="set ${s.done ? "done" : ""}" data-e="${ei}" data-s="${si}">
         <span class="n">${si+1}</span>
