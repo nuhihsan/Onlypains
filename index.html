@@ -666,7 +666,25 @@ function streaks(list){
   }
   return { cur, best: Math.max(best, cur), thisWeek: wc.get(thisW) || 0 };
 }
-function totalVolume(list){ return list.reduce((a,s)=>a+(s.entries||[]).reduce((b,e)=>b+e.sets.reduce((c,x)=>c+num(x.kg)*num(x.reps),0),0),0); }
+/* ---------- bodyweight exercises ----------
+   For these the kg box is ADDED weight. The share of your body weight you move (from strength research
+   on push-ups, dips and pull-ups) is added on top, using your latest weight on or before that day. */
+const BW_RULES = [[/muscle-?ups?|pull-?ups?|chin-?ups?/i, 1], [/bench dips?/i, 0.5], [/dips?\b/i, 0.95], [/push-?ups?/i, 0.64], [/inverted rows?/i, 0.6]];
+function bwShare(name){
+  name = String(name || "");
+  if(/assist|machine|band/i.test(name)) return 0;
+  for(const [re, f] of BW_RULES) if(re.test(name)) return f;
+  return 0;
+}
+function bwOn(date){
+  let older = null;
+  for(const m of measures){ if(!(m.weight > 0)) continue; if(!date || (m.date || "") <= date) return m.weight; older = m.weight; }
+  return older; // only weigh-ins after this day: use the earliest one
+}
+function effKg(name, k, date){ const f = bwShare(name); if(!f) return num(k); const w = bwOn(date); return w ? Math.round((num(k) + f * w) * 10) / 10 : num(k); }
+function effEntries(s){ return (s.entries || []).map(e => bwShare(e.name) ? Object.assign({}, e, { sets: (e.sets || []).map(x => Object.assign({}, x, { kg: effKg(e.name, x.kg, s.date) })) }) : e); }
+function setTxt(name, x){ if(!bwShare(name)) return `${kg(x.kg)}×${x.reps}`; const a = num(x.kg); return `BW${a > 0 ? "+" + kg(a) : a < 0 ? "−" + kg(-a) : ""}×${x.reps}`; }
+function totalVolume(list){ return list.reduce((a,s)=>a+effEntries(s).reduce((b,e)=>b+e.sets.reduce((c,x)=>c+num(x.kg)*num(x.reps),0),0),0); }
 const MILESTONES = [
   { group: "Sessions", list: [1,10,25,50,100,200], val: st => st.sessions,
     short: n => String(n), cap: n => n === 1 ? "first workout" : "sessions", fmt: v => String(v), name: n => n === 1 ? "First workout" : `${n} sessions` },
@@ -959,7 +977,7 @@ function renderCompare(){
     const B = sessions.find(s => s.id === cmpGymB && s.id !== A.id) || before.find(s => s.split === A.split) || before[0] || sessions.find(s => s.id !== A.id);
     const opts = sel => sessions.map(s => `<option value="${esc(s.id)}" ${s.id === sel ? "selected" : ""}>${esc(sessLabel(s))}</option>`).join("");
     const names = []; for(const e of [...(A.entries||[]), ...(B.entries||[])]) if(!names.some(n => n.toLowerCase() === e.name.toLowerCase())) names.push(e.name);
-    const find = (s, n) => (s.entries||[]).find(e => e.name.toLowerCase() === n.toLowerCase());
+    const find = (s, n) => effEntries(s).find(e => e.name.toLowerCase() === n.toLowerCase());
     const rows = names.map(n => {
       const ea = find(A, n), eb = find(B, n), ta = ea && topSet(ea), tb = eb && topSet(eb);
       const va = ea ? ea.sets.reduce((c,x)=>c+num(x.kg)*num(x.reps),0) : null, vb = eb ? eb.sets.reduce((c,x)=>c+num(x.kg)*num(x.reps),0) : null;
@@ -1478,18 +1496,18 @@ function extractCode(text){
 }
 function socReset(){ soc = socFeed = socProfile = socGroup = socErr = null; socProfileName = socGroupId = null; socTab = "feed"; }
 function buildPublic(){
-  const vol = s => (s.entries || []).reduce((b, e) => b + e.sets.reduce((c, x) => c + num(x.kg) * num(x.reps), 0), 0);
+  const vol = s => effEntries(s).reduce((b, e) => b + e.sets.reduce((c, x) => c + num(x.kg) * num(x.reps), 0), 0);
   const dated = sessions.filter(s => s.date);
   const asc = dated.slice().sort((a, b) => a.date.localeCompare(b.date) || (a.ts || 0) - (b.ts || 0));
   const best = new Map(), prs = new Map();
   for(const s of asc){ const pr = [];
-    for(const e of s.entries || []){ const t = topSet(e); if(!t) continue; const v = e1rm(num(t.kg), num(t.reps)); if(!(v > 0)) continue;
+    for(const e of effEntries(s)){ const t = topSet(e); if(!t) continue; const v = e1rm(num(t.kg), num(t.reps)); if(!(v > 0)) continue;
       const k = e.name.toLowerCase(), prev = best.get(k);
       if(prev && v > prev.v + 0.01) pr.push({ name: e.name.slice(0, 40), kg: num(t.kg), reps: num(t.reps) });
       if(!prev || v > prev.v) best.set(k, { v, name: e.name.slice(0, 40), kg: num(t.kg), reps: num(t.reps), date: s.date }); }
     if(pr.length) prs.set(s.id, pr.slice(0, 3)); }
   const recent = dated.slice().sort((a, b) => b.date.localeCompare(a.date) || (b.ts || 0) - (a.ts || 0)).slice(0, 12).map(s => {
-    const tops = (s.entries || []).map(e => ({ e, t: topSet(e) })).filter(x => x.t).sort((a, b) => e1rm(num(b.t.kg), num(b.t.reps)) - e1rm(num(a.t.kg), num(a.t.reps)));
+    const tops = effEntries(s).map(e => ({ e, t: topSet(e) })).filter(x => x.t).sort((a, b) => e1rm(num(b.t.kg), num(b.t.reps)) - e1rm(num(a.t.kg), num(a.t.reps)));
     return { sid: String(s.id || "").slice(0, 40), date: s.date, ts: s.ts || 0, name: String(s.splitName || s.split || "Workout").slice(0, 40), ex: (s.entries || []).length,
       sets: (s.entries || []).reduce((a, e) => a + e.sets.length, 0), vol: Math.round(vol(s)),
       top: tops.slice(0, 2).map(x => ({ name: x.e.name.slice(0, 40), kg: num(x.t.kg), reps: num(x.t.reps) })), prs: prs.get(s.id) || [] }; });
@@ -2298,8 +2316,14 @@ async function handleWriteError(e){
 
 /* ---------- app version & patch notes ----------
    Every update: bump APP_VERSION and add an entry at the TOP of PATCH_NOTES (see CLAUDE.md). */
-const APP_VERSION = "1.9";
+const APP_VERSION = "1.10";
 const PATCH_NOTES = [
+  { v: "1.10", date: "2026-11-19", items: [
+    "Bodyweight exercises now count your body weight: pull-ups, chin-ups and muscle-ups use 100% of it, dips 95%, push-ups 64%, inverted rows 60% and bench dips 50%",
+    "On those exercises the kg box is for added weight, like a vest or a plate on a belt. Leave it at 0 for plain bodyweight",
+    "Volume, est. 1RM, progress charts, compare, new bests and your friends' Feed all include it, using your weight from Me > Body on or before that day",
+    "Sets show as BW×10 or BW+10×8, so you can tell bodyweight sets apart",
+    "New bests after a workout now count more reps at the same weight, not just more weight" ] },
   { v: "1.9", date: "2026-11-19", items: [
     "Simpler tabs: Train, Progress, Food, Friends and Me. Lift and Run now sit together under Train",
     "Friends has its own tab, and Body, Settings and Feedback live under Me",
@@ -2422,12 +2446,14 @@ function renderLog(){
   const cards = draft.entries.map((e, ei) => {
     const tg = e.target || { sets: cfg.setTarget, reps: cfg.repTarget };
     const sug = suggestion(e.name, tg.sets, tg.reps);
-    const lastLine = sug ? `Last (${esc(fmtDate(sug.last.date))}): ${kg(sug.top)} kg × ${sug.last.sets.map(s => s.reps).join(", ")}` : "First time logging this";
-    const hint = sug && sug.hit && num(e.sets[0]?.kg) < sug.next ? `<button class="hint" data-action="apply" data-e="${ei}" data-kg="${sug.next}">Hit ${tg.sets}×${tg.reps} last time. Use ${kg(sug.next)} kg</button>` : "";
+    const bwF = bwShare(e.name), bwW = bwF ? bwOn(draft.date) : null;
+    const lastLine = (sug ? `Last (${esc(fmtDate(sug.last.date))}): ${bwF ? esc(setTxt(e.name, { kg: sug.top, reps: sug.last.sets.map(s => s.reps).join(", ") })) : `${kg(sug.top)} kg × ${sug.last.sets.map(s => s.reps).join(", ")}`}` : "First time logging this")
+      + (bwF ? `<br>${bwW ? (bwF === 1 ? `Counts your body weight (${kg(bwW)} kg)` : `Counts ${Math.round(bwF * 100)}% of your body weight (${kg(Math.round(bwF * bwW * 10) / 10)} kg)`) : `Log your weight under Me > Body to count your body weight`}` : "");
+    const hint = sug && sug.hit && num(e.sets[0]?.kg) < sug.next ? `<button class="hint" data-action="apply" data-e="${ei}" data-kg="${sug.next}">Hit ${tg.sets}×${tg.reps} last time. ${bwF ? `Add ${kg(sug.next)} kg (vest, belt or plate)` : `Use ${kg(sug.next)} kg`}</button>` : "";
     const sets = e.sets.map((s, si) => `
       <div class="set ${s.done ? "done" : ""}" data-e="${ei}" data-s="${si}">
         <span class="n">${si+1}</span>
-        <div class="stepper"><button data-action="kg-" aria-label="Less weight">−</button><input id="kg-${ei}-${si}" type="number" inputmode="decimal" step="0.5" min="0" value="${esc(s.kg)}" data-field="kg" aria-label="Set ${si+1} weight in kg" placeholder="kg"><button data-action="kg+" aria-label="More weight">+</button></div>
+        <div class="stepper"><button data-action="kg-" aria-label="Less weight">−</button><input id="kg-${ei}-${si}" type="number" inputmode="decimal" step="0.5" min="0" value="${esc(s.kg)}" data-field="kg" aria-label="Set ${si+1} ${bwF ? "added weight" : "weight"} in kg" placeholder="${bwF ? "0" : "kg"}"><button data-action="kg+" aria-label="More weight">+</button></div>
         <div class="stepper"><button data-action="r-" aria-label="Fewer reps">−</button><input id="r-${ei}-${si}" type="number" inputmode="numeric" step="1" min="0" value="${esc(s.reps)}" data-field="reps" aria-label="Set ${si+1} reps"><button data-action="r+" aria-label="More reps">+</button></div>
         <button class="check" data-action="done" aria-pressed="${s.done}" aria-label="Mark set ${si+1} done">✓</button>
       </div>`).join("");
@@ -2435,7 +2461,7 @@ function renderLog(){
       <div class="ex-head"><div><h3>${esc(e.name)}</h3><div class="last">${lastLine}</div></div>
         <button class="icon-btn more" data-action="ex-more" data-e="${ei}" aria-label="Options for ${esc(e.name)}">⋯</button></div>
       ${hint}
-      <div class="set-labels"><span></span><div class="unit">kg</div><div class="unit">reps</div><span></span></div>
+      <div class="set-labels"><span></span><div class="unit">${bwF ? "added kg" : "kg"}</div><div class="unit">reps</div><span></span></div>
       <div class="sets">${sets}</div>
     </section>`;
   }).join("");
@@ -2452,13 +2478,13 @@ function renderHistory(){
   if(!sessions.length) return `${bannerHtml()}<section class="card empty"><h3>No sessions logged</h3><p class="muted">Finished workouts show up here.</p></section>`;
   const items = sessions.map(s => {
     const sets = (s.entries||[]).reduce((a,e)=>a+e.sets.length,0);
-    const vol = (s.entries||[]).reduce((a,e)=>a+e.sets.reduce((b,x)=>b+num(x.kg)*num(x.reps),0),0);
+    const vol = effEntries(s).reduce((a,e)=>a+e.sets.reduce((b,x)=>b+num(x.kg)*num(x.reps),0),0);
     const open = openSession === s.id;
     return `<section class="card hist-item">
       <button class="hist-top" data-action="toggle" data-id="${esc(s.id)}" aria-expanded="${open}">
         <div><h3>${esc(fmtDateLong(s.date))}</h3><div class="stat-line"><span>${(s.entries||[]).length} exercises</span><span>${sets} sets</span><span>${Math.round(vol).toLocaleString()} kg volume</span></div></div>
         <span class="chip info">${esc(s.splitName || cfg.splits[s.split]?.name || s.split)}</span></button>
-      ${open ? `<div class="detail">${(s.entries||[]).map(e => `<div class="ln"><span>${esc(e.name)}</span><span>${e.sets.map(x => `${kg(x.kg)}×${x.reps}`).join("  ")}</span></div>`).join("")}
+      ${open ? `<div class="detail">${(s.entries||[]).map(e => `<div class="ln"><span>${esc(e.name)}</span><span>${e.sets.map(x => setTxt(e.name, x)).join("  ")}</span></div>`).join("")}
         <div class="row" style="justify-content:flex-end"><button class="btn small danger" data-action="del-session" data-id="${esc(s.id)}">Delete session</button></div></div>` : ""}
     </section>`;
   }).join("");
@@ -2473,13 +2499,14 @@ function allExerciseNames(){
 function historyFor(name){
   const key = name.toLowerCase(), out = [];
   for(const s of sessions){
-    const e = (s.entries||[]).find(x => x.name.toLowerCase() === key);
-    if(!e || !e.sets.length) continue;
+    const raw = (s.entries||[]).find(x => x.name.toLowerCase() === key);
+    if(!raw || !raw.sets.length) continue;
+    const e = effEntries({ entries: [raw], date: s.date })[0];
     let top = e.sets[0];
     for(const x of e.sets) if(num(x.kg) > num(top.kg) || (num(x.kg) === num(top.kg) && num(x.reps) > num(top.reps))) top = x;
     const best = Math.max(...e.sets.map(x => e1rm(num(x.kg), num(x.reps))));
     const vol = e.sets.reduce((a, x) => a + num(x.kg) * num(x.reps), 0);
-    out.push({ date: s.date, kg: num(top.kg), reps: num(top.reps), e1rm: best, vol, sets: e.sets });
+    out.push({ date: s.date, kg: num(top.kg), reps: num(top.reps), e1rm: best, vol, sets: raw.sets, name: raw.name });
   }
   return out.reverse(); // oldest first
 }
@@ -2590,7 +2617,7 @@ function renderProgress(){
   const thisW = mondayStr(), setBars = [], volBars = [];
   for(let i = 7; i >= 0; i--){ const w = addDays(thisW, -7*i), ss = sessions.filter(s => s.date >= w && s.date <= addDays(w, 6));
     setBars.push({ w, v: ss.reduce((a, s) => a + (s.entries || []).reduce((b, e) => b + e.sets.length, 0), 0) });
-    volBars.push({ w, v: ss.reduce((a, s) => a + (s.entries || []).reduce((b, e) => b + e.sets.reduce((c, x) => c + num(x.kg) * num(x.reps), 0), 0), 0) }); }
+    volBars.push({ w, v: ss.reduce((a, s) => a + effEntries(s).reduce((b, e) => b + e.sets.reduce((c, x) => c + num(x.kg) * num(x.reps), 0), 0), 0) }); }
   return `${bannerHtml()}
     <section class="card">
       <label class="field" for="progSel">Exercise<select id="progSel">${names.map(n => `<option ${n === progEx ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></label>
@@ -2605,7 +2632,7 @@ function renderProgress(){
       <div class="row between" style="margin-top:4px"><h3>${esc(mLabel)} (kg)</h3>${h.length > 1 ? `<span class="chip ${chg >= 0 ? "good" : "info"}">${chg >= 0 ? "▲" : "▼"} ${Math.abs(Math.round(chg))}%</span>` : ""}</div>
       ${trendSvg(h, val, sel)}
       <div class="row between" style="background:var(--bg);border-radius:10px;padding:10px 12px">
-        <span><b>${esc(fmtDateLong(sp.date))}</b>${isPR ? ` <span class="chip good">Best</span>` : ""}<br><small class="muted">${sp.sets.map(x => `${kg(x.kg)}×${x.reps}`).join("  ")}</small></span>
+        <span><b>${esc(fmtDateLong(sp.date))}</b>${isPR ? ` <span class="chip good">Best</span>` : ""}<br><small class="muted">${sp.sets.map(x => setTxt(progEx, x)).join("  ")}</small></span>
         <b style="font-family:var(--display);font-size:24px">${fmtBig(val(sp))}<small class="muted" style="font-size:12px"> kg</small></b></div>
       ${segHtml(PROG_RANGES.map(r => [r[0], r[1]]), progRange, "prog-range")}
       <p class="muted">Tap the chart to see any session. The dashed line is your overall trend.${progMetric === "vol" ? " Volume is weight × reps added up over every set." : ""}</p>
@@ -2618,8 +2645,8 @@ function renderProgress(){
     </section>
     <section class="card"><h3>Sets per week</h3>${weeklyBarsSvg(setBars, "Sets")}</section>
     <section class="card"><h3>Volume per week (kg)</h3>${weeklyBarsSvg(volBars, "Volume")}</section>
-    <section class="card"><h3>Recent ${esc(progEx)}</h3><div class="recent">${recent.map(p => `<div class="ln"><span>${esc(fmtDate(p.date))}</span><span>${p.sets.map(x => `${kg(x.kg)}×${x.reps}`).join("  ")}</span></div>`).join("")}</div>
-      <p class="muted">Est. 1-rep max uses the Epley formula: weight × (1 + reps ÷ 30).</p></section>
+    <section class="card"><h3>Recent ${esc(progEx)}</h3><div class="recent">${recent.map(p => `<div class="ln"><span>${esc(fmtDate(p.date))}</span><span>${p.sets.map(x => setTxt(progEx, x)).join("  ")}</span></div>`).join("")}</div>
+      <p class="muted">Est. 1-rep max uses the Epley formula: weight × (1 + reps ÷ 30).${bwShare(progEx) ? ` ${esc(progEx)} counts ${Math.round(bwShare(progEx) * 100)}% of your body weight plus any added weight.` : ""}</p></section>
     ${renderMilestones()}`;
 }
 
@@ -2917,11 +2944,12 @@ async function finishWorkout(){
     await sessCol.doc(draft.id).set(doc);
     const after = earned([Object.assign({ id: draft.id }, doc), ...sessions.filter(s => s.id !== draft.id)]);
     const fresh = [...after.keys()].filter(k => !before.has(k)).map(k => after.get(k));
-    const prs = entries.filter(e => { const top = Math.max(...e.sets.map(x => x.kg)); if(!(top > 0)) return false; const key = e.name.toLowerCase(); let best = 0, seen = false;
-      for(const s of sessions){ if(s.id === draft.id) continue; for(const x of s.entries || []) if((x.name || "").toLowerCase() === key){ seen = true; for(const y of x.sets || []) best = Math.max(best, num(y.kg)); } }
-      return seen && top > best; }).map(e => `${e.name} ${kg(Math.max(...e.sets.map(x => x.kg)))} kg`);
+    const effNow = effEntries({ entries, date: doc.date });
+    const prs = effNow.filter(e => { const top = Math.max(...e.sets.map(x => e1rm(x.kg, x.reps))); if(!(top > 0)) return false; const key = e.name.toLowerCase(); let best = 0, seen = false;
+      for(const s of sessions){ if(s.id === draft.id) continue; for(const x of effEntries(s)) if((x.name || "").toLowerCase() === key){ seen = true; for(const y of x.sets || []) best = Math.max(best, e1rm(num(y.kg), num(y.reps))); } }
+      return seen && top > best + 0.01; }).map(e => { const raw = entries.find(x => x.name === e.name), t = topSet(raw); return `${e.name} ${bwShare(e.name) ? setTxt(e.name, t) : kg(t.kg) + " kg × " + t.reps}`; });
     const mins = draft.startTs ? Math.round((Date.now() - draft.startTs) / 60000) : 0;
-    const sum = { name: doc.splitName, sets: entries.reduce((a, e) => a + e.sets.length, 0), vol: entries.reduce((a, e) => a + e.sets.reduce((b, x) => b + x.kg * x.reps, 0), 0), mins: mins > 0 && mins < 300 ? mins : 0, prs, fresh };
+    const sum = { name: doc.splitName, sets: entries.reduce((a, e) => a + e.sets.length, 0), vol: effNow.reduce((a, e) => a + e.sets.reduce((b, x) => b + x.kg * x.reps, 0), 0), mins: mins > 0 && mins < 300 ? mins : 0, prs, fresh };
     draft = null; restStop(); saveDraftLocal(); render(); window.scrollTo(0,0); showSummary(sum);
   } catch(e){ handleWriteError(e); }
   finally { saving = false; btn.disabled = false; btn.textContent = "Finish and save workout"; }
